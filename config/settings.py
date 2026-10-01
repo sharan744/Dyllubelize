@@ -41,9 +41,16 @@ def env_bool(key, default=False):
 # ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
-SECRET_KEY = env("SECRET_KEY", "BkNaS43up1TbE3pJpgcctWMNuBHXpj4oc1gAA73M5C-V7HQKrRK7_sxznHG8cySFmvY")
-DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = env("ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0").split(",")
+SECRET_KEY = "BkNaS43up1TbE3pJpgcctWMNuBHXpj4oc1gAA73M5C-V7HQKrRK7_sxznHG8cySFmvY"
+
+DEBUG = True
+
+ALLOWED_HOSTS = [
+    "139.59.6.61",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
