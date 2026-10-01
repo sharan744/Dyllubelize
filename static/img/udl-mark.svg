@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="UDL">
+  <defs>
+    <linearGradient id="udlg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0603a"/>
+      <stop offset="1" stop-color="#caa04e"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="15" fill="url(#udlg)"/>
+  <!-- ascending crates: distribution / growth -->
+  <g fill="#ffffff">
+    <rect x="14" y="35" width="9" height="15" rx="2.5" opacity="0.92"/>
+    <rect x="27.5" y="27" width="9" height="23" rx="2.5" opacity="0.96"/>
+    <rect x="41" y="19" width="9" height="31" rx="2.5"/>
+  </g>
+  <!-- dispatch arrow -->
+  <path d="M15 15.5 L37 15.5" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+  <path d="M33 11.5 L38 15.5 L33 19.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+</svg>

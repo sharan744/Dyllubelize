@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Expiring Soon{% endblock %}
+{% block page_title %}Expiring & Expired Stock{% endblock %}
+{% block subheading %}<div class="sub">Perishable batches, earliest expiry first · within {{ horizon }} days</div>{% endblock %}
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:16px">
+  <label class="small muted">Window (days) <input type="number" name="days" value="{{ horizon }}" min="1" style="width:80px"></label>
+  <button class="btn btn-dark btn-sm">Apply</button>
+</form>
+
+{% if expired %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #e03131">
+  <div class="card-head"><h3 style="margin:0">Already expired — remove from sale</h3></div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Product</th><th>Received</th><th>Expiry</th><th class="num">Qty left</th><th>Supplier</th></tr></thead>
+    <tbody>
+      {% for b in expired %}
+      <tr>
+        <td><b>{{ b.product.name }}</b> <span class="mono small muted">{{ b.product.sku }}</span></td>
+        <td>{{ b.received_date|date:"d M Y" }}</td>
+        <td style="color:#c92a2a"><b>{{ b.expiry_date|date:"d M Y" }}</b> ({{ b.days_to_expiry }}d)</td>
+        <td class="num"><b>{{ b.qty_remaining|floatformat:0 }}</b></td>
+        <td class="small muted">{{ b.supplier|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><h3 style="margin:0">Expiring within {{ horizon }} days</h3></div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Product</th><th>Received</th><th>Expiry</th><th class="num">Days left</th><th class="num">Qty left</th><th>Supplier</th></tr></thead>
+    <tbody>
+      {% for b in soon %}
+      <tr>
+        <td><b>{{ b.product.name }}</b> <span class="mono small muted">{{ b.product.sku }}</span></td>
+        <td>{{ b.received_date|date:"d M Y" }}</td>
+        <td>{{ b.expiry_date|date:"d M Y" }}</td>
+        <td class="num"><span class="pill {% if b.days_to_expiry <= 2 %}rejected{% else %}review{% endif %}"><span class="dot"></span>{{ b.days_to_expiry }}d</span></td>
+        <td class="num"><b>{{ b.qty_remaining|floatformat:0 }}</b></td>
+        <td class="small muted">{{ b.supplier|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='box' %}<h3>Nothing expiring soon</h3><p>No perishable batches fall due within {{ horizon }} days.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<p class="small muted" style="margin-top:12px">Batches are sold earliest-expiry-first (FEFO), so the oldest stock always leaves first. Admin &amp; team are emailed automatically as items near expiry.</p>
+{% endblock %}

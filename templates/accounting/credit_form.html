@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}New Credit Note{% endblock %}
+{% block page_title %}New Credit Note{% endblock %}
+{% block content %}
+<a href="{% url 'acc_credit_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to credit notes</a>
+<form method="post" class="card card-pad" style="max-width:640px">{% csrf_token %}
+  <div class="grid grid-2" style="gap:12px">
+    <div class="field"><label>Customer</label>{{ form.customer }}</div>
+    <div class="field"><label>Date</label>{{ form.date }}</div>
+    <div class="field"><label>Amount</label>{{ form.amount }}</div>
+    <div class="field"><label>Reason</label>{{ form.reason }}</div>
+  </div>
+  <p class="small muted">A credit note reduces what the customer owes (Dr Sales Returns, Cr Accounts Receivable).</p>
+
+  {% if open_invoices %}
+  <h3 style="margin:14px 0 6px">Apply to open invoices (optional)</h3>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Invoice</th><th>Date</th><th class="num">Balance</th><th class="num">Apply</th></tr></thead>
+    <tbody>
+      {% for i in open_invoices %}
+      <tr>
+        <td>{{ i.number }}</td><td>{{ i.date|date:"d M Y" }}</td>
+        <td class="num">{{ sym }}{{ i.balance|floatformat:2 }}</td>
+        <td class="num">
+          <input type="hidden" name="apply_invoice" value="{{ i.pk }}">
+          <input type="number" step="0.01" min="0" name="apply_amount" value="0" style="width:120px">
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="small muted">Pick a customer to list their open invoices and apply this credit to them.</p>
+  {% endif %}
+
+  <div class="form-actions">
+    <button class="btn btn-primary" data-busy>Issue Credit Note</button>
+    <a href="{% url 'acc_credit_list' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+<script>
+(function(){
+  const sel=document.querySelector('select[name=customer]');
+  if(sel) sel.addEventListener('change',()=>{ if(sel.value) location.href='?customer='+sel.value; });
+})();
+</script>
+{% endblock %}

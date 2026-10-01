@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Bill {{ bill.number }}{% endblock %}
+{% block page_title %}Bill {{ bill.number }}{% endblock %}
+{% block subheading %}<div class="sub">{{ bill.supplier }} · <span class="chip">{{ bill.get_status_display }}</span></div>{% endblock %}
+{% block topbar_actions %}<a href="{% url 'acc_bill_payment_new' %}?supplier={{ bill.supplier_id }}" class="btn btn-soft btn-sm">Pay</a>{% endblock %}
+{% block content %}
+<a href="{% url 'acc_bill_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to bills</a>
+<div class="grid grid-3" style="margin-bottom:16px">
+  <div class="stat t-ink"><div class="k">Total</div><div class="v">{{ sym }}{{ bill.total|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-green"><div class="k">Paid</div><div class="v">{{ sym }}{{ bill.amount_paid|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-amber"><div class="k">Balance</div><div class="v">{{ sym }}{{ bill.balance|floatformat:2|intcomma }}</div></div>
+</div>
+<div class="card">
+  <div><b>Bill date:</b> {{ bill.date|date:"d M Y" }} · <b>Due:</b> {{ bill.due_date|date:"d M Y" }}{% if bill.purchase_order %} · <b>PO:</b> {{ bill.purchase_order }}{% endif %}</div>
+  <div class="table-wrap" style="margin-top:12px"><table class="tbl">
+    <thead><tr><th>Account</th><th>Description</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      {% for l in bill.lines.all %}
+      <tr><td class="small">{{ l.account.code }} · {{ l.account.name }}</td><td>{{ l.description }}</td><td class="num">{{ sym }}{{ l.amount|floatformat:2|intcomma }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="2" class="num"><b>Total</b></td><td class="num"><b>{{ sym }}{{ bill.total|floatformat:2|intcomma }}</b></td></tr></tfoot>
+  </table></div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Create Dispatch{% endblock %}
+{% block page_title %}Create Dispatch List{% endblock %}
+{% block subheading %}<div class="sub">Select one or more ready orders to combine into a single dispatch / vehicle.</div>{% endblock %}
+{% block content %}
+<a href="{% url 'dispatch_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to dispatch</a>
+<form method="post">{% csrf_token %}
+<div class="detail-grid">
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Ready Orders</h3>
+    {% for o in ready_orders %}
+    <label class="sel-order" data-sel>
+      <input type="checkbox" name="orders" value="{{ o.pk }}" onchange="this.closest('.sel-order').classList.toggle('checked', this.checked)">
+      <div style="flex:1">
+        <b>{{ o.order_no }}</b> — {{ o.customer }}
+        <div class="small muted">{{ o.customer.delivery_address|default:"No delivery address"|truncatewords:10 }}</div>
+      </div>
+      <div class="right small"><b>{{ o.total_items|floatformat:0 }}</b> items<div class="muted">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</div></div>
+    </label>
+    {% empty %}
+    <div class="empty"><p>No orders are ready for dispatch right now.</p></div>
+    {% endfor %}
+  </div>
+
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Dispatch Details</h3>
+    {% include 'core/_form.html' %}
+    <div class="form-actions">
+      <button class="btn btn-primary btn-block">Create Dispatch</button>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}

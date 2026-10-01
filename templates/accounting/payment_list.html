@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Payments{% endblock %}
+{% block page_title %}Customer Payments{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'acc_credit_list' %}" class="btn btn-soft btn-sm">Credit Notes</a>
+<a href="{% url 'acc_payment_new' %}" class="btn btn-dark btn-sm">+ Receive Payment</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Receipt</th><th>Customer</th><th>Date</th><th>Method</th><th>Deposited to</th><th class="num">Amount</th></tr></thead>
+  <tbody>
+    {% for p in payments %}
+    <tr>
+      <td><b>{{ p.number }}</b></td><td>{{ p.customer }}</td><td>{{ p.date|date:"d M Y" }}</td>
+      <td>{{ p.get_method_display }}{% if p.reference %} · {{ p.reference }}{% endif %}</td>
+      <td class="small">{{ p.deposit_account.name }}</td>
+      <td class="num"><b>{{ sym }}{{ p.amount|floatformat:2|intcomma }}</b></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty"><p>No payments recorded yet.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot><tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b>{{ sym }}{{ total|floatformat:2|intcomma }}</b></td></tr></tfoot>
+</table></div></div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if order %}Edit Order{% else %}New Order{% endif %}{% endblock %}
+{% block page_title %}{% if order %}Edit Order {{ order.order_no }}{% else %}Create New Order{% endif %}{% endblock %}
+{% block subheading %}<div class="sub">Select a customer, add products, then submit for Team Lead review.</div>{% endblock %}
+
+{% block content %}
+<form method="post" id="order-form">{% csrf_token %}
+  <input type="hidden" name="customer_id" id="customer_id" value="{{ preset_customer_id }}">
+  <input type="hidden" name="items_json" id="items_json">
+  <input type="hidden" name="discount_percent" id="discount_percent_hidden" value="0">
+  <input type="hidden" name="action" id="action-field" value="draft">
+  <input type="hidden" id="preset-customer" value="{{ preset_customer_id }}">
+
+  <div class="builder">
+    <!-- Left: customer + products -->
+    <div>
+      <!-- Customer -->
+      <div class="card card-pad" style="margin-bottom:18px">
+        <div class="flex" style="justify-content:space-between;margin-bottom:10px">
+          <h3 style="margin:0">1 · Customer</h3>
+          <a href="{% url 'customer_create' %}?next=order" class="btn btn-soft btn-sm">{% include 'core/_icon.html' with name='plus' %} New customer</a>
+        </div>
+        <div id="cust-selected" style="display:none" class="card-pad" ></div>
+        <div id="cust-picker">
+          <div class="search-box">
+            {% include 'core/_icon.html' with name='search' %}
+            <input type="search" id="cust-search" placeholder="Search existing customers by name, shop or mobile…" autocomplete="off">
+          </div>
+          <div id="cust-results" style="display:none;margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- Products -->
+      <div class="card card-pad">
+        <h3 style="margin-bottom:10px">2 · Add Products</h3>
+        <div class="search-box picker-search">
+          {% include 'core/_icon.html' with name='search' %}
+          <input type="search" id="pk-search" placeholder="Filter catalogue…" autocomplete="off">
+        </div>
+        <div class="pk-list" id="pk-list"></div>
+      </div>
+    </div>
+
+    <!-- Right: cart -->
+    <div class="card cart">
+      <div class="card-head"><h3>Order Summary</h3></div>
+      <div class="card-pad">
+        <div class="cart-items" id="cart-items"></div>
+
+        <div class="field" style="margin:14px 0 8px">
+          <label for="discount_percent">Order discount (%)</label>
+          <input type="number" id="discount_percent" min="0" max="100" step="0.5" value="0"
+                 oninput="document.getElementById('discount_percent_hidden').value=this.value">
+        </div>
+        <div class="field">
+          <label for="remarks">Remarks / Special instructions</label>
+          <textarea name="remarks" id="remarks" rows="2" placeholder="Delivery notes, packaging, etc.">{% if order %}{{ order.remarks }}{% endif %}</textarea>
+        </div>
+
+        <div style="border-top:1px solid var(--line-2);padding-top:12px;margin-top:6px">
+          <div class="totrow"><span class="muted">Lines / Items</span><span><b id="t-lines">0</b> / <b id="t-items">0</b></span></div>
+          <div class="totrow"><span class="muted">Subtotal</span><span id="t-subtotal">{{ site.currency_symbol }}0.00</span></div>
+          <div class="totrow"><span class="muted">Discount</span><span id="t-disc">−{{ site.currency_symbol }}0.00</span></div>
+          <div class="totrow grand"><span>Total</span><span id="t-grand">{{ site.currency_symbol }}0.00</span></div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button type="button" class="btn btn-ghost btn-block" id="btn-draft">Save Draft</button>
+          <button type="button" class="btn btn-primary btn-block" id="btn-submit">Submit Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script id="products-data" type="application/json">{{ products_json|safe }}</script>
+<script id="items-data" type="application/json">{{ items_json|safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>window.CURRENCY_SYMBOL = "{{ site.currency_symbol }}";</script>
+<script type="module" src="{% static 'js/order_builder.js' %}"></script>
+{% endblock %}

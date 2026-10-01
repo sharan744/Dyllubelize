@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Dispatch{% endblock %}
+{% block page_title %}Dispatch{% endblock %}
+{% block subheading %}<div class="sub">{{ ready_count }} order(s) ready for dispatch</div>{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'dispatch_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='truck' %} Create Dispatch</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Dispatch</th><th>Orders</th><th>Vehicle / Driver</th><th>Dispatch Date</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for d in dispatches %}
+    <tr>
+      <td><a href="{% url 'dispatch_detail' d.pk %}" class="ordno">{{ d.dispatch_no }}</a>{% if d.is_multi_stop %}<span class="chip" style="margin-left:6px">Multi-stop</span>{% endif %}</td>
+      <td>{{ d.order_count }} order(s)<div class="small muted">{{ d.total_items|floatformat:0 }} items</div></td>
+      <td class="small">{{ d.vehicle_details|default:"—" }}<div class="muted">{{ d.driver_name }}</div></td>
+      <td class="small">{{ d.dispatch_date|date:"d M Y" }}</td>
+      <td><span class="pill {{ d.status }}"><span class="dot"></span>{{ d.get_status_display }}</span></td>
+      <td class="right">
+        <a href="{% url 'delivery_document' d.pk %}" class="btn btn-soft btn-sm" target="_blank">{% include 'core/_icon.html' with name='print' %} Doc</a>
+        <a href="{% url 'dispatch_detail' d.pk %}" class="btn btn-ghost btn-sm">Open</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='truck' %}<h3>No dispatches yet</h3><p>Create a dispatch from orders that are ready.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

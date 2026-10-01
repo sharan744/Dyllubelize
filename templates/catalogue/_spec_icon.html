@@ -1,0 +1,28 @@
+{% comment %}Renders a small line icon guessed from a spec label. Pass label=<lowercased label>.{% endcomment %}
+{% if 'power' in label or 'watt' in label or 'motor' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><rect x="3" y="8" width="18" height="8" rx="2"/><path d="M7 8v8M11 8v8M15 8v8M1 12h2M21 12h2"/></svg>
+{% elif 'volt' in label or 'v~' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M9 3v6M15 3v6M8 9h8v3a4 4 0 0 1-8 0zM12 16v3a3 3 0 0 0 3 3h3"/></svg>
+{% elif 'speed' in label or 'rpm' in label or '/min' in label or 'no-load' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><circle cx="9" cy="12" r="3"/><path d="M9 4a8 8 0 0 1 8 8M9 2v2M2 12h2"/><circle cx="18" cy="7" r="1.6"/></svg>
+{% elif 'chuck' in label or 'drill' in label or 'mm' in label and 'weight' not in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M10 2h4v5h-4zM9 7h6l-1 4h-4zM11 11h2v6l-1 3-1-3z"/></svg>
+{% elif 'rotation' in label or 'forward' in label or 'reverse' in label or 'f/r' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M4 9a7 7 0 0 1 11-3l2 2M20 15a7 7 0 0 1-11 3l-2-2"/><path d="M17 4v4h-4M7 20v-4h4"/></svg>
+{% elif 'impact' in label or 'bpm' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+{% elif 'frequency' in label or 'hz' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/></svg>
+{% elif 'weight' in label or 'kg' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M9 7a3 3 0 1 1 6 0M6 7h12l2 13H4z"/></svg>
+{% elif 'cable' in label or 'cord' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M4 4v6a4 4 0 0 0 8 0V6a2 2 0 0 1 4 0v8a4 4 0 0 0 4 4"/></svg>
+{% elif 'battery' in label or 'li-ion' in label or 'volt' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><rect x="3" y="8" width="16" height="9" rx="2"/><path d="M19 11h2v3h-2M7 10v5M10 10v5"/></svg>
+{% elif 'thread' in label or 'spindle' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M8 3h8M8 6h8M8 9h8M9 9v8l3 3 3-3V9"/></svg>
+{% elif 'warranty' in label or 'guarantee' in label or 'month' in label or 'year' in label %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>
+{% else %}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+{% endif %}

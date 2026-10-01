@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% load humanize flujo_extras %}
+{% block title %}{{ order.order_no }}{% endblock %}
+{% block page_title %}Order {{ order.order_no }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'order_quotation' order.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='file' %} Quotation</a>
+  {% if user.is_dispatch or user.is_delivery or user.is_admin_role %}
+    {% if order.status == 'dispatched' or order.status == 'delivered' or order.status == 'completed' %}
+    <a href="{% url 'return_create' %}?order={{ order.pk }}" class="btn btn-ghost">{% include 'core/_icon.html' with name='back' %} Return</a>
+    {% endif %}
+  {% endif %}
+  {% if user.is_sales and order.status == 'draft' or user.is_sales and order.status == 'rejected' %}
+    <a href="{% url 'order_edit' order.pk %}" class="btn btn-primary">{% include 'core/_icon.html' with name='edit' %} Edit Order</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<a href="{% url 'order_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to orders</a>
+
+<!-- Pipeline -->
+<div class="card card-pad" style="margin-bottom:18px">
+  {% if order.status == 'rejected' or order.status == 'cancelled' %}
+  <div class="flex" style="gap:10px"><span class="pill {{ order.status }}"><span class="dot"></span>{{ order.get_status_display }}</span>
+    <span class="muted small">This order is {{ order.get_status_display|lower }}.</span></div>
+  {% else %}
+  <div class="pipeline">
+    {% for s in pipeline %}
+    <div class="pl-step {% if forloop.counter0 < order.status_index %}done{% elif forloop.counter0 == order.status_index %}current{% endif %}">
+      <div class="node">
+        {% if forloop.counter0 < order.status_index %}{% include 'core/_icon.html' with name='check' %}{% endif %}
+      </div>
+      <div class="lbl">{{ s.label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="detail-grid">
+  <!-- Left: items + actions -->
+  <div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>Items</h3><div class="spacer"></div>
+        <span class="chip">{{ order.distinct_items }} line(s) · {{ order.total_items|floatformat:0 }} units</span></div>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Product</th><th>SKU</th><th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Total</th></tr></thead>
+          <tbody>
+            {% for i in order.items.all %}
+            <tr>
+              <td><b>{{ i.product_name }}</b>{% if i.note %}<div class="small muted">{{ i.note }}</div>{% endif %}</td>
+              <td><span class="mono">{{ i.sku }}</span></td>
+              <td class="num">{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}</td>
+              <td class="num">{{ i.quantity|floatformat:0 }} <span class="muted small">{{ i.unit }}</span></td>
+              <td class="num">{{ i.line_discount_percent|floatformat:0 }}%</td>
+              <td class="num"><b>{{ site.currency_symbol }}{{ i.line_total|floatformat:2|intcomma }}</b></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}{{ order.subtotal|floatformat:2|intcomma }}</td></tr>
+            {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}{{ order.discount_amount|floatformat:2|intcomma }}</td></tr>{% endif %}
+            <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}{{ order.total|floatformat:2|intcomma }}</b></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    {% if order.remarks %}
+    <div class="card card-pad" style="margin-bottom:18px">
+      <h4 class="muted small" style="text-transform:uppercase;letter-spacing:.06em">Remarks</h4>
+      <p style="margin:0">{{ order.remarks }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Role actions -->
+    {% if user.is_team_lead and order.status == 'submitted' or user.is_team_lead and order.status == 'review' %}
+    <div class="card card-pad" style="border:2px solid var(--warn)">
+      <h3>Team Lead Review</h3>
+      <form method="post" action="{% url 'order_review_action' order.pk %}">{% csrf_token %}
+        <div class="field"><label for="note">Remarks (optional)</label>
+          <textarea name="note" id="note" rows="2" placeholder="Add a note for the salesperson or processing team…"></textarea></div>
+        <div class="flex" style="gap:10px">
+          <button name="action" value="confirm" class="btn btn-ok">{% include 'core/_icon.html' with name='check' %} Confirm Order</button>
+          <button name="action" value="reject" class="btn btn-danger">Return for Correction</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if user.is_processing and order.status == 'confirmed' or user.is_processing and order.status == 'processing' %}
+    <div class="card card-pad" style="border:2px solid var(--s-proc)">
+      <h3>Processing</h3>
+      <form method="post" action="{% url 'processing_action' order.pk %}">{% csrf_token %}
+        {% if order.status == 'confirmed' %}
+        <button name="action" value="start" class="btn btn-dark">Start Processing</button>
+        {% else %}
+        <button name="action" value="ready" class="btn btn-primary">Mark Ready for Dispatch</button>
+        {% endif %}
+      </form>
+    </div>
+    {% endif %}
+
+    {% if order.status == 'delivered' or order.status == 'completed' %}
+      {% if delivery %}
+      <div class="card card-pad" style="border:2px solid var(--ok)">
+        <h3>Proof of Delivery</h3>
+        <dl class="kv">
+          <dt>Delivered</dt><dd>{{ delivery.delivered_at|date:"d M Y, H:i" }}</dd>
+          <dt>Received by</dt><dd>{{ delivery.received_by }}</dd>
+          <dt>Delivered by</dt><dd>{{ delivery.delivered_by.display_name }}</dd>
+          {% if delivery.signature_name %}<dt>Signature</dt><dd>{{ delivery.signature_name }}</dd>{% endif %}
+          {% if delivery.remarks %}<dt>Remarks</dt><dd>{{ delivery.remarks }}</dd>{% endif %}
+          {% if delivery.pod_file %}<dt>POD file</dt><dd><a href="{{ delivery.pod_file.url }}" target="_blank">View attachment</a></dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Right: customer + history -->
+  <div>
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div class="flex" style="justify-content:space-between">
+        <h3 style="margin:0">Customer</h3>
+        <a href="{% url 'customer_detail' order.customer.pk %}" class="small">View →</a>
+      </div>
+      <hr class="sep" style="margin:12px 0">
+      <dl class="kv">
+        <dt>Name</dt><dd><b>{{ order.customer.name }}</b></dd>
+        {% if order.customer.company_name %}<dt>Company</dt><dd>{{ order.customer.company_name }}</dd>{% endif %}
+        <dt>Mobile</dt><dd>{{ order.customer.mobile }}</dd>
+        {% if order.customer.email %}<dt>Email</dt><dd>{{ order.customer.email }}</dd>{% endif %}
+        {% if order.customer.delivery_address %}<dt>Delivery</dt><dd>{{ order.customer.delivery_address }}</dd>{% endif %}
+        {% if order.customer.tax_id %}<dt>Tax ID</dt><dd>{{ order.customer.tax_id }}</dd>{% endif %}
+      </dl>
+      {% if order.customer.mobile %}
+      <a class="btn btn-teal btn-sm btn-block" style="margin-top:14px" target="_blank"
+         href="https://wa.me/{{ order.customer.mobile|digits }}?text=Hello%20{{ order.customer.name|urlencode }}%2C%20regarding%20your%20order%20{{ order.order_no|urlencode }}%20with%20{{ site.company_name|urlencode }}.">
+        {% include 'core/_icon.html' with name='phone' %} WhatsApp customer
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:18px">
+      <dl class="kv">
+        <dt>Status</dt><dd><span class="pill {{ order.status }}"><span class="dot"></span>{{ order.get_status_display }}</span></dd>
+        <dt>Salesperson</dt><dd>{{ order.salesperson.display_name|default:"—" }}</dd>
+        <dt>Created</dt><dd>{{ order.created_at|date:"d M Y, H:i" }}</dd>
+        {% if order.confirmed_at %}<dt>Confirmed</dt><dd>{{ order.confirmed_at|date:"d M Y" }} by {{ order.confirmed_by.display_name }}</dd>{% endif %}
+        {% if order.team_lead_remarks %}<dt>TL remarks</dt><dd>{{ order.team_lead_remarks }}</dd>{% endif %}
+      </dl>
+      {% if order.dispatches.exists %}
+      <hr class="sep" style="margin:12px 0">
+      {% for d in order.dispatches.all %}
+      <a href="{% url 'dispatch_detail' d.pk %}" class="btn btn-soft btn-sm btn-block">{% include 'core/_icon.html' with name='truck' %} {{ d.dispatch_no }}</a>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <h3 style="margin-bottom:14px">History</h3>
+      <ul class="timeline">
+        {% for log in logs %}
+        <li>
+          <span class="tdot"></span>
+          <b>{{ log.to_status_label }}</b>
+          <div class="tmeta">{{ log.created_at|date:"d M Y, H:i" }}{% if log.changed_by %} · {{ log.changed_by.display_name }}{% endif %}</div>
+          {% if log.note %}<div class="small muted">{{ log.note }}</div>{% endif %}
+        </li>
+        {% empty %}
+        <li><span class="tdot"></span><b>Created</b><div class="tmeta">{{ order.created_at|date:"d M Y, H:i" }}</div></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    {% if user.is_team_lead or user.is_admin_role %}
+      {% if order.status != 'cancelled' %}
+      <div class="card card-pad" style="margin-top:18px;border:1px solid #f1c9c9">
+        <h3 style="margin-bottom:8px">Cancel / Return</h3>
+        <p class="small muted" style="margin-top:0">Cancels the order.
+          {% if order.stock_committed %}Its quantities are returned to warehouse stock.{% endif %}</p>
+        <form method="post" action="{% url 'order_cancel' order.pk %}"
+              onsubmit="return confirm('Cancel this order and return its items to stock?');">
+          {% csrf_token %}
+          <input type="text" name="note" placeholder="Reason (optional)" style="margin-bottom:8px">
+          <button class="btn btn-danger btn-block">Cancel &amp; Return to Stock</button>
+        </form>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

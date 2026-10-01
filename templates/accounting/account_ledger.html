@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ account.name }}{% endblock %}
+{% block page_title %}{{ account.code }} · {{ account.name }}{% endblock %}
+{% block subheading %}<div class="sub">{{ account.get_type_display }} account ledger</div>{% endblock %}
+{% block content %}
+<a href="{% url 'acc_coa' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to Chart of Accounts</a>
+<form method="get" class="toolbar" style="margin-bottom:16px">
+  <label class="small muted">From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label class="small muted">To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark btn-sm">Apply</button>
+  <span class="chip" style="margin-left:auto">Closing balance: <b>{{ sym }}{{ closing|floatformat:2|intcomma }}</b></span>
+</form>
+<div class="card"><div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Date</th><th>Entry</th><th>Memo</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+  <tbody>
+    <tr><td colspan="5" class="muted">Opening balance</td><td class="num">{{ sym }}{{ opening|floatformat:2|intcomma }}</td></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.l.entry.date|date:"d M Y" }}</td>
+      <td class="mono small">{{ r.l.entry.entry_no }}</td>
+      <td class="muted">{{ r.l.memo|default:r.l.entry.memo }}{% if r.l.customer %} · {{ r.l.customer }}{% endif %}{% if r.l.supplier %} · {{ r.l.supplier }}{% endif %}</td>
+      <td class="num">{% if r.l.debit %}{{ sym }}{{ r.l.debit|floatformat:2|intcomma }}{% endif %}</td>
+      <td class="num">{% if r.l.credit %}{{ sym }}{{ r.l.credit|floatformat:2|intcomma }}{% endif %}</td>
+      <td class="num">{{ sym }}{{ r.running|floatformat:2|intcomma }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty"><p>No transactions in this period.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Accounting{% endblock %}
+{% block page_title %}Accounting &amp; Revenue{% endblock %}
+{% block subheading %}<div class="sub">Realized revenue from delivered &amp; completed orders · {{ window.start|date:"d M Y" }} – {{ window.end|date:"d M Y" }}</div>{% endblock %}
+
+{% block content %}
+<!-- Period tabs -->
+<div class="toolbar" style="margin-bottom:20px">
+  <div style="display:inline-flex;background:var(--paper-2);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px">
+    <a href="?period=weekly"  class="btn btn-sm {% if period == 'weekly' %}btn-primary{% else %}btn-soft{% endif %}" style="{% if period != 'weekly' %}background:transparent{% endif %}">Weekly</a>
+    <a href="?period=monthly" class="btn btn-sm {% if period == 'monthly' %}btn-primary{% else %}btn-soft{% endif %}" style="{% if period != 'monthly' %}background:transparent{% endif %}">Monthly</a>
+    <a href="?period=yearly"  class="btn btn-sm {% if period == 'yearly' %}btn-primary{% else %}btn-soft{% endif %}" style="{% if period != 'yearly' %}background:transparent{% endif %}">Yearly</a>
+  </div>
+</div>
+
+<!-- KPI tiles -->
+<div class="grid grid-4" style="margin-bottom:22px">
+  <div class="stat t-green">
+    <div class="k">Total Revenue</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ total_rev|floatformat:2|intcomma }}</div>
+    <div class="foot">{{ site.currency_code }} · net of tax</div>
+  </div>
+  <div class="stat t-ink">
+    <div class="k">Orders Completed</div>
+    <div class="v">{{ total_orders }}</div>
+    <div class="foot">in this window</div>
+  </div>
+  <div class="stat t-teal">
+    <div class="k">Avg Order Value</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ avg|floatformat:2|intcomma }}</div>
+    <div class="foot">revenue ÷ orders</div>
+  </div>
+  <div class="stat t-amber">
+    <div class="k">Returns / Cancelled</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ returns_val|floatformat:2|intcomma }}</div>
+    <div class="foot">{{ returns_cnt }} order(s)</div>
+  </div>
+</div>
+
+<div class="detail-grid">
+  <!-- Chart -->
+  <div class="card card-pad">
+    <h3 style="margin-bottom:4px">Revenue — {{ period|capfirst }}</h3>
+    <p class="small muted" style="margin-top:0">Realized revenue per {% if period == 'weekly' %}week{% elif period == 'yearly' %}year{% else %}month{% endif %}.</p>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:280px;padding-top:16px;border-bottom:2px solid var(--line);margin-top:10px">
+      {% for c in chart %}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+        <div class="small" style="font-weight:700;color:var(--ink);margin-bottom:6px;font-size:.72rem">
+          {% if c.value %}{{ site.currency_symbol }}{{ c.value|floatformat:0|intcomma }}{% endif %}
+        </div>
+        <div title="{{ c.label }}: {{ site.currency_symbol }}{{ c.value|floatformat:2|intcomma }}"
+             style="width:100%;max-width:46px;border-radius:8px 8px 0 0;
+                    background:linear-gradient(180deg,var(--accent),var(--accent-3));
+                    height:{% widthratio c.value chart_max 240 %}px;min-height:3px"></div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      {% for c in chart %}
+      <div style="flex:1;text-align:center" class="small muted">{{ c.label }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Breakdown table -->
+  <div class="card">
+    <div class="card-head"><h3>Breakdown</h3></div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Period</th><th class="num">Orders</th><th class="num">Revenue</th></tr></thead>
+        <tbody>
+          {% for r in table %}
+          <tr>
+            <td><b>{{ r.label }}</b></td>
+            <td class="num">{{ r.count }}</td>
+            <td class="num">{{ site.currency_symbol }}{{ r.value|floatformat:2|intcomma }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td><b>Total</b></td><td class="num"><b>{{ total_orders }}</b></td>
+              <td class="num"><b>{{ site.currency_symbol }}{{ total_rev|floatformat:2|intcomma }}</b></td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Returns register summary -->
+<div class="card card-pad" style="margin-top:20px">
+  <div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:14px">
+    <div>
+      <h3 style="margin:0">Returns register (RMA)</h3>
+      <p class="small muted" style="margin:2px 0 0">Processed returns in this window</p>
+    </div>
+    <div class="flex" style="gap:28px">
+      <div><div class="k small muted">Returns</div><div style="font-size:1.5rem;font-weight:800;color:var(--ink)">{{ rma_count }}</div></div>
+      <div><div class="k small muted">Restocked value</div><div style="font-size:1.5rem;font-weight:800;color:#2f9e44">{{ site.currency_symbol }}{{ rma_restock|floatformat:2|intcomma }}</div></div>
+      <div><div class="k small muted">Damaged / write-off</div><div style="font-size:1.5rem;font-weight:800;color:#b8791b">{{ site.currency_symbol }}{{ rma_damaged|floatformat:2|intcomma }}</div></div>
+    </div>
+  </div>
+</div>
+
+<p class="small muted" style="margin-top:18px">
+  Revenue counts orders that reached <b>Delivered</b> or <b>Completed</b>, valued after discounts and before {{ site.tax_label|default:"tax" }}.
+  Cancelled orders and returned goods are excluded from revenue. On a return, good units go back to sellable stock and
+  damaged units are written off (shown above as a loss).
+</p>
+{% endblock %}

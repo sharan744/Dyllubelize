@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Incentives{% endblock %}
+{% block page_title %}Salesperson Incentives{% endblock %}
+{% block subheading %}<div class="sub">Incentive = % of gross margin (price − cost) on delivered orders · {{ start|date:"d M Y" }} – {{ end|date:"d M Y" }}</div>{% endblock %}
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:20px">
+  <label class="small muted">From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label class="small muted">To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark">Apply</button>
+  <span class="chip" style="margin-left:auto">Default rate: <b>{{ default_rate|floatformat:1 }}%</b> of margin</span>
+</form>
+
+<div class="grid grid-3" style="margin-bottom:20px">
+  <div class="stat t-teal"><div class="k">Total Sales</div><div class="v" style="font-size:1.5rem">{{ site.currency_symbol }}{{ tot_sales|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-ink"><div class="k">Total Margin</div><div class="v" style="font-size:1.5rem">{{ site.currency_symbol }}{{ tot_margin|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-green"><div class="k">Total Incentive Payable</div><div class="v" style="font-size:1.5rem">{{ site.currency_symbol }}{{ tot_inc|floatformat:2|intcomma }}</div></div>
+</div>
+
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Salesperson</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Margin</th><th class="num">Rate</th><th class="num">Incentive</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><b>{{ r.name }}</b></td>
+      <td class="num">{{ r.orders }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ r.sales|floatformat:2|intcomma }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ r.margin|floatformat:2|intcomma }}</td>
+      <td class="num">{{ r.rate|floatformat:1 }}%</td>
+      <td class="num"><b style="color:#2f9e44">{{ site.currency_symbol }}{{ r.incentive|floatformat:2|intcomma }}</b></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='money' %}<h3>No sales in this range</h3><p>Incentives appear once orders are delivered.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot><tr><td><b>Total</b></td><td></td><td class="num"><b>{{ site.currency_symbol }}{{ tot_sales|floatformat:2|intcomma }}</b></td><td class="num"><b>{{ site.currency_symbol }}{{ tot_margin|floatformat:2|intcomma }}</b></td><td></td><td class="num"><b>{{ site.currency_symbol }}{{ tot_inc|floatformat:2|intcomma }}</b></td></tr></tfoot>
+</table>
+</div></div>
+<p class="small muted" style="margin-top:14px">Set the company default in <b>Admin → Site settings</b>, or override per salesperson in <b>Users</b>. Each salesperson can set their own price per line when building an order — a lower price means lower margin and therefore a lower incentive, so pricing stays self-regulating.</p>
+{% endblock %}

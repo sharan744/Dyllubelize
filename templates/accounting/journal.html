@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}General Journal{% endblock %}
+{% block page_title %}General Journal{% endblock %}
+{% block topbar_actions %}<a href="{% url 'acc_journal_new' %}" class="btn btn-dark btn-sm">+ New Entry</a>{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Entry</th><th>Date</th><th>Type</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+  <tbody>
+    {% for je in entries %}
+      {% for l in je.lines.all %}
+      <tr>
+        {% if forloop.first %}
+        <td rowspan="{{ je.lines.all|length }}"><b>{{ je.entry_no }}</b><div class="small muted">{{ je.memo }}</div></td>
+        <td rowspan="{{ je.lines.all|length }}">{{ je.date|date:"d M Y" }}</td>
+        <td rowspan="{{ je.lines.all|length }}"><span class="chip">{{ je.get_source_display }}</span></td>
+        {% endif %}
+        <td class="small">{{ l.account.code }} · {{ l.account.name }}</td>
+        <td class="num">{% if l.debit %}{{ sym }}{{ l.debit|floatformat:2|intcomma }}{% endif %}</td>
+        <td class="num">{% if l.credit %}{{ sym }}{{ l.credit|floatformat:2|intcomma }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    {% empty %}
+    <tr><td colspan="6"><div class="empty"><p>No journal entries yet.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

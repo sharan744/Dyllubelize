@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Statement · {{ customer }}{% endblock %}
+{% block page_title %}Customer Statement{% endblock %}
+{% block subheading %}<div class="sub">{{ customer }} · as of {{ today|date:"d M Y" }}</div>{% endblock %}
+{% block topbar_actions %}<button onclick="window.print()" class="btn btn-soft btn-sm">Print</button>{% endblock %}
+{% block content %}
+<a href="{% url 'acc_ar_aging' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to aging</a>
+<div class="card">
+  <div class="flex" style="justify-content:space-between;margin-bottom:8px">
+    <div><b>{{ site.company_name }}</b><div class="small muted">Statement of account</div></div>
+    <div style="text-align:right"><b>{{ customer.company_name|default:customer.name }}</b><div class="small muted">{{ customer.mobile }}</div></div>
+  </div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th class="num">Charges</th><th class="num">Payments</th><th class="num">Balance</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td>{{ e.date|date:"d M Y" }}</td><td>{{ e.type }}</td><td class="mono small">{{ e.ref }}</td>
+        <td class="num">{% if e.charge %}{{ sym }}{{ e.charge|floatformat:2|intcomma }}{% endif %}</td>
+        <td class="num">{% if e.credit %}{{ sym }}{{ e.credit|floatformat:2|intcomma }}{% endif %}</td>
+        <td class="num">{{ sym }}{{ e.balance|floatformat:2|intcomma }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty"><p>No activity.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="5" class="num"><b>Balance due</b></td><td class="num"><b>{{ sym }}{{ balance|floatformat:2|intcomma }}</b></td></tr></tfoot>
+  </table></div>
+</div>
+{% endblock %}

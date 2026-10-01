@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Sales Reports{% endblock %}
+{% block page_title %}Sales Reports{% endblock %}
+{% block subheading %}<div class="sub">{{ start|date:"d M Y" }} – {{ end|date:"d M Y" }} · net of tax</div>{% endblock %}
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:16px">
+  <label class="small muted">From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label class="small muted">To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark btn-sm">Apply</button>
+  <span class="chip" style="margin-left:auto">Total sales: <b>{{ sym }}{{ grand|floatformat:2|intcomma }}</b></span>
+</form>
+<div class="grid grid-2" style="gap:16px;align-items:start">
+  <div class="card"><h3 style="margin-top:0">By salesperson</h3>
+    <table class="tbl">{% for r in by_person %}<tr><td>{{ r.name }}</td><td class="num">{{ sym }}{{ r.val|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td class="muted small">No sales.</td></tr>{% endfor %}</table>
+  </div>
+  <div class="card"><h3 style="margin-top:0">By customer</h3>
+    <table class="tbl">{% for r in by_cust %}<tr><td>{{ r.name }}</td><td class="num">{{ sym }}{{ r.val|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td class="muted small">No sales.</td></tr>{% endfor %}</table>
+  </div>
+</div>
+<div class="card" style="margin-top:16px"><h3 style="margin-top:0">Top products / items</h3>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Item</th><th class="num">Sales</th></tr></thead>
+    <tbody>{% for r in by_product %}<tr><td>{{ r.name }}</td><td class="num">{{ sym }}{{ r.val|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="2" class="muted small">No sales.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

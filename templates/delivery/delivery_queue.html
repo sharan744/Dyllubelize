@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Deliveries{% endblock %}
+{% block page_title %}Deliveries{% endblock %}
+{% block subheading %}<div class="sub">{{ orders|length }} delivery(ies) to confirm</div>{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:20px">
+  <div class="card-head"><h3>Out for delivery</h3></div>
+  <div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Order</th><th>Customer</th><th>Address</th><th>Dispatch</th><th></th></tr></thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td><a href="{% url 'order_detail' o.pk %}" class="ordno">{{ o.order_no }}</a></td>
+        <td>{{ o.customer }}<div class="small muted">{{ o.customer.mobile }}</div></td>
+        <td class="small">{{ o.customer.delivery_address|default:"—"|truncatewords:12 }}</td>
+        <td class="small">{% for d in o.dispatches.all %}{{ d.dispatch_no }}{% endfor %}</td>
+        <td class="right"><a href="{% url 'delivery_confirm' o.pk %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='check' %} Confirm Delivery</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5"><div class="empty">{% include 'core/_icon.html' with name='pin' %}<h3>No pending deliveries</h3><p>Dispatched orders will appear here.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% if done %}
+<div class="card">
+  <div class="card-head"><h3>Recently completed</h3></div>
+  <div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>When</th></tr></thead>
+    <tbody>
+      {% for o in done %}
+      <tr>
+        <td><a href="{% url 'order_detail' o.pk %}" class="ordno">{{ o.order_no }}</a></td>
+        <td>{{ o.customer }}</td>
+        <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
+        <td class="small muted">{{ o.updated_at|naturaltime }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

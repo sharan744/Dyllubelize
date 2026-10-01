@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sign in{% endblock %}
+{% block auth_content %}
+<div style="min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr">
+  <!-- Brand panel -->
+  <div style="background:linear-gradient(160deg,#17161f,#2e2c40);color:#f6f3ec;padding:56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+    <div style="position:absolute;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(224,96,58,.35),transparent 70%);top:-120px;right:-120px"></div>
+    <div style="position:absolute;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(15,139,134,.28),transparent 70%);bottom:-100px;left:-80px"></div>
+    <div class="brand" style="padding:0;position:relative">
+      <img src="{% static 'img/udl-mark.svg' %}" alt="UDL"
+           style="width:48px;height:48px;border-radius:12px;box-shadow:0 4px 12px rgba(224,96,58,.4)">
+      <div class="name" style="font-size:1.5rem">UDL Belize<small>Distribution &amp; Supply</small></div>
+    </div>
+    <div style="position:relative">
+      <h1 style="color:#fff;font-size:2.4rem;line-height:1.15;max-width:15ch">One platform, from order to doorstep.</h1>
+      <p style="color:rgba(246,243,236,.7);max-width:42ch;font-size:1.02rem">
+        Catalogue, orders, team-lead approval, dispatch and proof-of-delivery — tracked in one place.
+        No more scattered Excel sheets, WhatsApp messages or paper trails.</p>
+      <div class="flex wrap" style="gap:8px;margin-top:22px">
+        <span class="chip" style="background:rgba(255,255,255,.08);color:rgba(246,243,236,.85);border-color:rgba(255,255,255,.12)">Catalogue</span>
+        <span class="chip" style="background:rgba(255,255,255,.08);color:rgba(246,243,236,.85);border-color:rgba(255,255,255,.12)">Orders</span>
+        <span class="chip" style="background:rgba(255,255,255,.08);color:rgba(246,243,236,.85);border-color:rgba(255,255,255,.12)">Dispatch</span>
+        <span class="chip" style="background:rgba(255,255,255,.08);color:rgba(246,243,236,.85);border-color:rgba(255,255,255,.12)">Delivery</span>
+      </div>
+    </div>
+    <div style="position:relative;color:rgba(246,243,236,.45);font-size:.82rem">Internal operations system</div>
+  </div>
+
+  <!-- Form panel -->
+  <div style="display:grid;place-items:center;padding:40px;background:var(--paper)">
+    <div style="width:100%;max-width:360px">
+      <h2 style="font-size:1.6rem">Welcome back</h2>
+      <p class="muted" style="margin-top:-4px">Sign in to continue to your workspace.</p>
+
+      {% if form.errors %}
+      <div class="flash error" style="position:static;box-shadow:none;margin:16px 0">
+        {% include 'core/_icon.html' with name='info' %}
+        <span>Incorrect username or password. Please try again.</span>
+      </div>
+      {% endif %}
+
+      <form method="post" style="margin-top:20px">
+        {% csrf_token %}
+        <div class="field">
+          <label for="id_username">Username</label>
+          <input type="text" name="username" id="id_username" autofocus required>
+        </div>
+        <div class="field">
+          <label for="id_password">Password</label>
+          <input type="password" name="password" id="id_password" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">Sign in</button>
+        <input type="hidden" name="next" value="{{ next }}">
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

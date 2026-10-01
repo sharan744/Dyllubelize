@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize flujo_extras %}
+{% block title %}{{ dispatch.dispatch_no }}{% endblock %}
+{% block page_title %}Dispatch {{ dispatch.dispatch_no }}{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'delivery_document' dispatch.pk %}" class="btn btn-dark" target="_blank">{% include 'core/_icon.html' with name='print' %} Delivery Document</a>
+{% if user.is_dispatch and dispatch.status == 'planned' %}
+<form method="post" action="{% url 'dispatch_mark_sent' dispatch.pk %}" style="display:inline">{% csrf_token %}
+  <button class="btn btn-primary" data-busy="Dispatching &amp; notifying…">{% include 'core/_icon.html' with name='truck' %} Mark Dispatched</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block content %}
+<a href="{% url 'dispatch_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to dispatch</a>
+
+<div class="detail-grid">
+  <div class="card">
+    <div class="card-head"><h3>Orders in this dispatch</h3><div class="spacer"></div>
+      <span class="chip">{{ dispatch.order_count }} order(s) · {{ dispatch.total_items|floatformat:0 }} items</span></div>
+    {% for o in dispatch.orders.all %}
+    <div class="card-pad" style="border-bottom:1px solid var(--line-2)">
+      <div class="flex" style="justify-content:space-between">
+        <div><a href="{% url 'order_detail' o.pk %}" class="ordno">{{ o.order_no }}</a> — <b>{{ o.customer }}</b>
+          <div class="small muted">{{ o.customer.delivery_address|default:"No address"|truncatewords:14 }} · {{ o.customer.mobile }}</div></div>
+        <span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span>
+      </div>
+      <table class="tbl" style="margin-top:10px">
+        <tbody>
+        {% for i in o.items.all %}
+        <tr><td>{{ i.product_name }}</td><td class="mono small">{{ i.sku }}</td><td class="num">{{ i.quantity|floatformat:0 }} {{ i.unit }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Logistics</h3>
+    <dl class="kv">
+      <dt>Status</dt><dd><span class="pill {{ dispatch.status }}"><span class="dot"></span>{{ dispatch.get_status_display }}</span></dd>
+      <dt>Vehicle</dt><dd>{{ dispatch.vehicle_details|default:"—" }}</dd>
+      <dt>Driver</dt><dd>{{ dispatch.driver_name|default:"—" }}</dd>
+      <dt>Driver phone</dt><dd>{{ dispatch.driver_contact|default:"—" }}</dd>
+      <dt>Dispatch date</dt><dd>{{ dispatch.dispatch_date|date:"d M Y" }}</dd>
+      <dt>Expected</dt><dd>{{ dispatch.expected_delivery_date|date:"d M Y"|default:"—" }}</dd>
+      {% if dispatch.special_instructions %}<dt>Instructions</dt><dd>{{ dispatch.special_instructions }}</dd>{% endif %}
+      {% if dispatch.remarks %}<dt>Remarks</dt><dd>{{ dispatch.remarks }}</dd>{% endif %}
+      <dt>Created by</dt><dd>{{ dispatch.created_by.display_name|default:"—" }}</dd>
+    </dl>
+    {% if dispatch.driver_contact %}
+    <a class="btn btn-teal btn-sm btn-block" style="margin-top:12px" target="_blank"
+       href="https://wa.me/{{ dispatch.driver_contact|digits }}?text=Regarding%20dispatch%20{{ dispatch.dispatch_no|urlencode }}%20%E2%80%94%20{{ dispatch.order_count }}%20order(s)%20for%20delivery.">
+      {% include 'core/_icon.html' with name='phone' %} WhatsApp driver
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

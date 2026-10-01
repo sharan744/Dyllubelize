@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Users{% endblock %}
+{% block page_title %}Users &amp; Roles{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'user_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add User</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>User</th><th>Username</th><th>Role</th><th>Email</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td><div class="flex"><div class="who av" style="width:32px;height:32px;flex:0 0 32px;font-size:.75rem">{{ u.initials }}</div><b>{{ u.display_name }}</b></div></td>
+      <td class="mono small">{{ u.username }}</td>
+      <td><span class="chip">{{ u.get_role_display }}</span></td>
+      <td class="small">{{ u.email|default:"—" }}</td>
+      <td>{% if u.is_active %}<span class="pill dispatched"><span class="dot"></span>Active</span>{% else %}<span class="pill draft"><span class="dot"></span>Disabled</span>{% endif %}</td>
+      <td class="right"><a href="{% url 'user_edit' u.pk %}" class="btn btn-soft btn-sm">Edit</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

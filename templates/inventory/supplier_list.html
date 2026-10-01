@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Suppliers{% endblock %}
+{% block page_title %}Suppliers{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'supplier_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add Supplier</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Supplier</th><th>Contact</th><th>Phone</th><th>Email</th><th class="num">POs</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for s in suppliers %}
+    <tr>
+      <td><b>{{ s.name }}</b></td>
+      <td class="small">{{ s.contact_person|default:"—" }}</td>
+      <td>{{ s.phone|default:"—" }}</td>
+      <td class="small">{{ s.email|default:"—" }}</td>
+      <td class="num">{{ s.po_count }}</td>
+      <td>{% if s.is_active %}<span class="pill dispatched"><span class="dot"></span>Active</span>{% else %}<span class="pill draft"><span class="dot"></span>Inactive</span>{% endif %}</td>
+      <td class="right"><a href="{% url 'supplier_edit' s.pk %}" class="btn btn-soft btn-sm">Edit</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No suppliers</h3><p>Add suppliers to raise purchase orders.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

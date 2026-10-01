@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ po.po_no }}{% endblock %}
+{% block page_title %}Purchase Order {{ po.po_no }}{% endblock %}
+{% block topbar_actions %}
+  {% if po.status == 'draft' %}
+  <form method="post" action="{% url 'po_action' po.pk %}" style="display:inline">{% csrf_token %}
+    <button name="action" value="order" class="btn btn-dark">Mark Ordered</button></form>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>
+
+<div class="detail-grid">
+  <div>
+    <form method="post" action="{% url 'po_action' po.pk %}">{% csrf_token %}
+    <div class="card">
+      <div class="card-head"><h3>Lines</h3><div class="spacer"></div>
+        {% if po.status != 'received' and po.status != 'cancelled' %}<span class="chip">Enter received qty, then Receive</span>{% endif %}</div>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Unit cost</th><th class="num">Line cost</th>{% if po.status != 'received' and po.status != 'cancelled' %}<th class="num">Receive qty</th>{% else %}<th class="num">Received</th>{% endif %}</tr></thead>
+          <tbody>
+            {% for l in po.lines.all %}
+            <tr>
+              <td><b>{{ l.product.name }}</b><div class="mono small muted">{{ l.product.sku }}</div></td>
+              <td class="num">{{ l.qty_ordered|floatformat:0 }}</td>
+              <td class="num">{{ site.currency_symbol }}{{ l.unit_cost|floatformat:2 }}</td>
+              <td class="num">{{ site.currency_symbol }}{{ l.line_cost|floatformat:2|intcomma }}</td>
+              {% if po.status != 'received' and po.status != 'cancelled' %}
+              <td class="num"><input type="number" name="recv_{{ l.id }}" min="0" step="1" value="{{ l.qty_ordered|floatformat:0 }}" style="width:90px;text-align:right"></td>
+              {% else %}
+              <td class="num"><b>{{ l.qty_received|floatformat:0 }}</b></td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr><td colspan="3" class="num"><b>Total</b></td><td class="num"><b>{{ site.currency_symbol }}{{ po.total_cost|floatformat:2|intcomma }}</b></td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    {% if po.status != 'received' and po.status != 'cancelled' %}
+    <div class="flex" style="gap:10px;margin-top:14px">
+      <button name="action" value="receive" class="btn btn-primary"
+        onclick="return confirm('Receive this PO? Stock will be increased by the received quantities.');">
+        {% include 'core/_icon.html' with name='check' %} Receive &amp; Add to Stock</button>
+      <button name="action" value="cancel" class="btn btn-danger"
+        onclick="return confirm('Cancel this PO?');">Cancel PO</button>
+    </div>
+    {% endif %}
+    </form>
+  </div>
+
+  <div class="card card-pad">
+    <dl class="kv">
+      <dt>Status</dt><dd>{% if po.status == 'received' %}<span class="pill delivered"><span class="dot"></span>Received</span>{% elif po.status == 'ordered' %}<span class="pill confirmed"><span class="dot"></span>Ordered</span>{% elif po.status == 'cancelled' %}<span class="pill rejected"><span class="dot"></span>Cancelled</span>{% else %}<span class="pill draft"><span class="dot"></span>Draft</span>{% endif %}</dd>
+      <dt>Supplier</dt><dd><b>{{ po.supplier.name }}</b>{% if po.supplier.phone %}<div class="small muted">{{ po.supplier.phone }}</div>{% endif %}</dd>
+      <dt>Order date</dt><dd>{{ po.order_date|date:"d M Y" }}</dd>
+      <dt>Expected</dt><dd>{{ po.expected_date|date:"d M Y"|default:"—" }}</dd>
+      {% if po.received_at %}<dt>Received</dt><dd>{{ po.received_at|date:"d M Y, H:i" }} · {{ po.received_by.display_name }}</dd>{% endif %}
+      <dt>Created by</dt><dd>{{ po.created_by.display_name|default:"—" }}</dd>
+      {% if po.notes %}<dt>Notes</dt><dd>{{ po.notes }}</dd>{% endif %}
+    </dl>
+  </div>
+</div>
+{% endblock %}

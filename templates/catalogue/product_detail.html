@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block page_title %}{{ product.name }}{% endblock %}
+{% block topbar_actions %}
+  {% if user.is_sales or user.is_admin_role %}
+  <a href="{% url 'order_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New Order</a>
+  {% endif %}
+  {% if user.is_admin_role %}
+  <a href="{% url 'product_edit' product.pk %}" class="btn btn-ghost">{% include 'core/_icon.html' with name='edit' %} Edit</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<a href="{% url 'catalogue' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to catalogue</a>
+
+<div class="detail-grid">
+  <!-- Left: image + description + specs -->
+  <div>
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div class="flex" style="gap:22px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:240px;height:240px;border-radius:12px;background:var(--paper-2);display:grid;place-items:center;overflow:hidden;flex:0 0 240px">
+          {% if product.image %}<img src="{{ product.image.url }}" style="width:100%;height:100%;object-fit:contain">
+          {% else %}{% include 'core/_icon.html' with name='box' %}{% endif %}
+        </div>
+        <div style="flex:1;min-width:220px">
+          {% if product.brand %}<span class="chip" style="background:#eef7ed;color:#2f7d32">{{ product.brand }}</span>{% endif %}
+          <span class="chip">{{ product.category.name }}</span>
+          <h2 style="margin:10px 0 2px">{{ product.name }}</h2>
+          <div class="mono muted">{{ product.sku }}</div>
+          <div class="pr" style="margin-top:14px;display:flex;align-items:baseline;gap:6px">
+            <b style="font-size:1.8rem;color:var(--ink)">{{ site.currency_symbol }}{{ product.selling_price|floatformat:2|intcomma }}</b>
+            <span class="muted">/ {{ product.unit_label }}</span>
+          </div>
+          <div class="flex" style="gap:8px;margin-top:12px">
+            {% if product.track_stock %}
+              {% if product.out_of_stock %}<span class="pill rejected"><span class="dot"></span>Out of stock</span>
+              {% elif product.needs_reorder %}<span class="pill review"><span class="dot"></span>Low: {{ product.stock_qty|floatformat:0 }} left</span>
+              {% else %}<span class="pill dispatched"><span class="dot"></span>{{ product.stock_qty|floatformat:0 }} in stock</span>{% endif %}
+            {% endif %}
+            {% if not product.is_active %}<span class="pill draft"><span class="dot"></span>Inactive</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if product.long_description %}
+      <hr class="sep">
+      <h4 class="muted small" style="text-transform:uppercase;letter-spacing:.06em">Description</h4>
+      <p style="margin:0;line-height:1.6">{{ product.long_description|linebreaksbr }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Specifications -->
+    <div class="card">
+      <div class="card-head"><h3>Specifications &amp; components</h3></div>
+      {% if product.specs.all %}
+      <div class="spec-tiles">
+        {% for s in product.specs.all %}
+        <div class="spec-tile" title="{{ s.label }}: {{ s.value }}">
+          <div class="spec-ic">{% include 'catalogue/_spec_icon.html' with label=s.label|lower %}</div>
+          <div class="spec-val">{{ s.value }}</div>
+          <div class="spec-lbl">{{ s.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="table-wrap" style="margin-top:6px">
+        <table class="tbl">
+          <tbody>
+            {% for s in product.specs.all %}
+            <tr><td style="width:40%;color:var(--tx-soft);font-weight:600">{{ s.label }}</td><td>{{ s.value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:26px"><p class="muted">No specifications added yet.{% if user.is_admin_role %} Add them on the <a href="{% url 'product_edit' product.pk %}">edit product</a> page.{% endif %}</p></div>
+      {% endif %}
+    </div>
+
+    {% if product.is_perishable %}
+    <div class="card" style="margin-top:18px">
+      <div class="card-head"><h3>Stock batches (FEFO)</h3></div>
+      {% if product.active_batches %}
+      <div class="table-wrap"><table class="tbl">
+        <thead><tr><th>Received</th><th>Expiry</th><th class="num">Days left</th><th class="num">Qty left</th></tr></thead>
+        <tbody>
+          {% for b in product.active_batches %}
+          <tr>
+            <td>{{ b.received_date|date:"d M Y" }}</td>
+            <td>{% if b.expiry_date %}{{ b.expiry_date|date:"d M Y" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{% if b.days_to_expiry != None %}{% if b.is_expired %}<span style="color:#c92a2a">expired</span>{% else %}{{ b.days_to_expiry }}d{% endif %}{% else %}—{% endif %}</td>
+            <td class="num"><b>{{ b.qty_remaining|floatformat:0 }}</b></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      <p class="small muted" style="padding:10px 14px 0">Earliest-expiry batch is sold first, so the oldest stock always leaves first.</p>
+      {% else %}
+      <div class="empty" style="padding:22px"><p class="muted">No stock batches yet. Receive stock with an expiry date from Warehouse → Inventory.</p></div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: similar products -->
+  <div>
+    <div class="card">
+      <div class="card-head"><h3>Similar products</h3></div>
+      <div class="card-pad" style="display:flex;flex-direction:column;gap:10px">
+        {% for sp in similar %}
+        <a href="{% url 'product_detail' sp.pk %}" class="flex" style="gap:12px;padding:8px;border-radius:10px;border:1px solid var(--line);text-decoration:none;color:inherit">
+          <div style="width:54px;height:54px;border-radius:8px;background:var(--paper-2);display:grid;place-items:center;overflow:hidden;flex:0 0 54px">
+            {% if sp.image %}<img src="{{ sp.image.url }}" style="width:100%;height:100%;object-fit:contain">
+            {% else %}{% include 'core/_icon.html' with name='box' %}{% endif %}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:.9rem;line-height:1.2">{{ sp.name }}</div>
+            <div class="mono small muted">{{ sp.sku }}</div>
+            <div style="font-weight:700;color:var(--accent-ink);font-size:.9rem">{{ site.currency_symbol }}{{ sp.selling_price|floatformat:2|intcomma }}</div>
+          </div>
+        </a>
+        {% empty %}
+        <p class="muted small">No other products in this category yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ inv.number }}{% endblock %}
+{% block page_title %}Invoice {{ inv.number }}{% endblock %}
+{% block subheading %}<div class="sub">{{ inv.customer }} · <span class="chip">{{ inv.get_status_display }}</span></div>{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'acc_payment_new' %}?customer={{ inv.customer_id }}" class="btn btn-soft btn-sm">Receive Payment</a>
+<a href="{% url 'acc_statement' inv.customer_id %}" class="btn btn-soft btn-sm">Statement</a>
+{% if inv.status != 'void' %}
+<form method="post" action="{% url 'acc_invoice_void' inv.pk %}" style="display:inline" onsubmit="return confirm('Void this invoice? Its ledger entry will be removed.')">{% csrf_token %}<button class="btn btn-sm" style="background:#fde2e2;color:#c92a2a">Void</button></form>
+{% endif %}
+{% endblock %}
+{% block content %}
+<a href="{% url 'acc_invoice_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to invoices</a>
+<div class="grid grid-3" style="margin-bottom:16px">
+  <div class="stat t-ink"><div class="k">Total</div><div class="v">{{ sym }}{{ inv.total|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-green"><div class="k">Paid</div><div class="v">{{ sym }}{{ inv.amount_paid|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-amber"><div class="k">Balance</div><div class="v">{{ sym }}{{ inv.balance|floatformat:2|intcomma }}</div></div>
+</div>
+<div class="card">
+  <div class="flex" style="justify-content:space-between">
+    <div><b>Invoice date:</b> {{ inv.date|date:"d M Y" }}<br><b>Due:</b> {{ inv.due_date|date:"d M Y" }}{% if inv.order %}<br><b>Order:</b> {{ inv.order.order_no }}{% endif %}</div>
+    <div class="small muted" style="text-align:right">{{ inv.memo }}</div>
+  </div>
+  <div class="table-wrap" style="margin-top:12px"><table class="tbl">
+    <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      {% for l in inv.lines.all %}
+      <tr><td>{{ l.description }}</td><td class="num">{{ l.quantity|floatformat:2 }}</td><td class="num">{{ sym }}{{ l.unit_price|floatformat:2|intcomma }}</td><td class="num">{{ sym }}{{ l.amount|floatformat:2|intcomma }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="3" class="num">Subtotal</td><td class="num">{{ sym }}{{ inv.subtotal|floatformat:2|intcomma }}</td></tr>
+      {% if inv.tax %}<tr><td colspan="3" class="num">Tax ({{ inv.tax_percent }}%)</td><td class="num">{{ sym }}{{ inv.tax|floatformat:2|intcomma }}</td></tr>{% endif %}
+      <tr><td colspan="3" class="num"><b>Total</b></td><td class="num"><b>{{ sym }}{{ inv.total|floatformat:2|intcomma }}</b></td></tr>
+    </tfoot>
+  </table></div>
+</div>
+{% if inv.payment_applications.all or inv.credit_applications.all %}
+<div class="card" style="margin-top:16px"><h3 style="margin-top:0">Payments & credits applied</h3>
+<table class="tbl">
+  {% for a in inv.payment_applications.all %}<tr><td>{{ a.payment.number }} · {{ a.payment.date|date:"d M Y" }}</td><td class="num">{{ sym }}{{ a.amount|floatformat:2|intcomma }}</td></tr>{% endfor %}
+  {% for a in inv.credit_applications.all %}<tr><td>Credit {{ a.credit_note.number }}</td><td class="num">{{ sym }}{{ a.amount|floatformat:2|intcomma }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}

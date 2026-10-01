@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Customers{% endblock %}
+{% block page_title %}Customers{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'customer_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add Customer</a>
+{% endblock %}
+{% block content %}
+<form method="get" class="toolbar">
+  <div class="search-box grow">{% include 'core/_icon.html' with name='search' %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by name, shop or mobile…"></div>
+  <button class="btn btn-dark">Search</button>
+</form>
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Customer</th><th>Contact</th><th>Mobile</th><th class="num">Orders</th><th></th></tr></thead>
+  <tbody>
+    {% for c in customers %}
+    <tr onclick="location.href='{% url 'customer_detail' c.pk %}'" style="cursor:pointer">
+      <td><b>{{ c.company_name|default:c.name }}</b>{% if c.company_name %}<div class="small muted">{{ c.name }}</div>{% endif %}</td>
+      <td class="small">{{ c.contact_person|default:"—" }}</td>
+      <td>{{ c.mobile }}</td>
+      <td class="num">{{ c.order_count }}</td>
+      <td class="right"><a href="{% url 'customer_detail' c.pk %}" class="btn btn-soft btn-sm">Open</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No customers</h3><p>Add your first customer.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

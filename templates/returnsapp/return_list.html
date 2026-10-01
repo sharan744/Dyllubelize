@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Returns{% endblock %}
+{% block page_title %}Returns / RMA{% endblock %}
+{% block subheading %}<div class="sub">Goods returned from customers — good units restocked, damaged units written off</div>{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'return_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New Return</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>RMA</th><th>Order</th><th>Customer</th><th>Reason</th><th class="num">Good</th><th class="num">Damaged</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for r in returns %}
+    <tr onclick="location.href='{% url 'return_detail' r.pk %}'" style="cursor:pointer">
+      <td><span class="ordno">{{ r.rma_no }}</span></td>
+      <td class="mono small">{{ r.order.order_no }}</td>
+      <td>{{ r.customer }}</td>
+      <td class="small">{{ r.get_reason_display }}</td>
+      <td class="num">{{ r.good_qty|floatformat:0 }}</td>
+      <td class="num" style="color:#b8791b">{{ r.damaged_qty|floatformat:0 }}</td>
+      <td>{% if r.status == 'completed' %}<span class="pill delivered"><span class="dot"></span>Completed</span>{% elif r.status == 'open' %}<span class="pill review"><span class="dot"></span>Open</span>{% else %}<span class="pill draft"><span class="dot"></span>{{ r.get_status_display }}</span>{% endif %}</td>
+      <td class="right"><a href="{% url 'return_detail' r.pk %}" class="btn btn-soft btn-sm">Open</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8"><div class="empty">{% include 'core/_icon.html' with name='back' %}<h3>No returns yet</h3><p>Create a return when goods come back from a customer.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

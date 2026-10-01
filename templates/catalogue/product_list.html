@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Products{% endblock %}
+{% block page_title %}Products{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'product_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add Product</a>
+{% endblock %}
+{% block content %}
+<form method="get" class="toolbar">
+  <div class="search-box grow">
+    {% include 'core/_icon.html' with name='search' %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search products…">
+  </div>
+  <button class="btn btn-dark">Search</button>
+</form>
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Unit</th><th class="num">Price</th><th class="num">Stock</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for p in products %}
+    <tr>
+      <td><b>{{ p.name }}</b></td>
+      <td><span class="mono">{{ p.sku }}</span></td>
+      <td>{{ p.category.name }}</td>
+      <td class="small">{{ p.unit_label }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ p.selling_price|floatformat:2|intcomma }}</td>
+      <td class="num">{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% if p.is_active %}<span class="pill dispatched"><span class="dot"></span>Active</span>{% else %}<span class="pill draft"><span class="dot"></span>Inactive</span>{% endif %}</td>
+      <td class="right">
+        <a href="{% url 'product_edit' p.pk %}" class="btn btn-soft btn-sm">Edit</a>
+        <a href="{% url 'product_toggle' p.pk %}" class="btn btn-ghost btn-sm">{% if p.is_active %}Off{% else %}On{% endif %}</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8"><div class="empty"><h3>No products</h3><p>Add products so the sales team can build orders.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

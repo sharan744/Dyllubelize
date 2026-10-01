@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Review Queue{% endblock %}
+{% block page_title %}Team Lead — Review Queue{% endblock %}
+{% block subheading %}<div class="sub">{{ orders|length }} order(s) awaiting confirmation</div>{% endblock %}
+{% block content %}
+{% if orders %}
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
+  {% for o in orders %}
+  <div class="card card-pad">
+    <div class="flex" style="justify-content:space-between;margin-bottom:8px">
+      <a href="{% url 'order_detail' o.pk %}" class="ordno" style="font-size:1rem">{{ o.order_no }}</a>
+      <span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span>
+    </div>
+    <div><b>{{ o.customer }}</b></div>
+    <div class="small muted">by {{ o.salesperson.display_name }} · {{ o.created_at|naturaltime }}</div>
+    <hr class="sep" style="margin:12px 0">
+    <div class="flex" style="justify-content:space-between">
+      <span class="chip">{{ o.distinct_items }} items</span>
+      <b style="font-size:1.1rem">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</b>
+    </div>
+    <form method="post" action="{% url 'order_review_action' o.pk %}" style="margin-top:14px">{% csrf_token %}
+      <div class="flex" style="gap:8px">
+        <button name="action" value="confirm" class="btn btn-ok btn-sm">Confirm</button>
+        <button name="action" value="reject" class="btn btn-danger btn-sm">Return</button>
+        <a href="{% url 'order_detail' o.pk %}" class="btn btn-soft btn-sm" style="margin-left:auto">Review →</a>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">{% include 'core/_icon.html' with name='check' %}<h3>All caught up</h3><p>No orders are waiting for review.</p></div></div>
+{% endif %}
+{% endblock %}

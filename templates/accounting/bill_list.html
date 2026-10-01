@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Bills{% endblock %}
+{% block page_title %}Bills (Accounts Payable){% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'acc_ap_aging' %}" class="btn btn-soft btn-sm">A/P Aging</a>
+<a href="{% url 'acc_bill_payment_new' %}" class="btn btn-soft btn-sm">Pay Bills</a>
+<a href="{% url 'acc_bill_new' %}" class="btn btn-dark btn-sm">+ Enter Bill</a>
+{% endblock %}
+{% block content %}
+<div class="toolbar" style="margin-bottom:16px"><span class="chip" style="margin-left:auto">Payable outstanding: <b>{{ sym }}{{ total_open|floatformat:2|intcomma }}</b></span></div>
+<div class="card"><div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Bill #</th><th>Supplier</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for b in bills %}
+    <tr>
+      <td><a href="{% url 'acc_bill_detail' b.pk %}"><b>{{ b.number }}</b></a></td>
+      <td>{{ b.supplier }}</td>
+      <td>{{ b.date|date:"d M Y" }}</td>
+      <td>{{ b.due_date|date:"d M Y" }}{% if b.is_overdue %} <span class="chip" style="background:#fde2e2;color:#c92a2a">{{ b.days_overdue }}d</span>{% endif %}</td>
+      <td class="num">{{ sym }}{{ b.total|floatformat:2|intcomma }}</td>
+      <td class="num"><b>{{ sym }}{{ b.balance|floatformat:2|intcomma }}</b></td>
+      <td><span class="chip">{{ b.get_status_display }}</span></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty"><p>No bills entered yet.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

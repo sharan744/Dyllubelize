@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Confirm Delivery{% endblock %}
+{% block page_title %}Confirm Delivery — {{ order.order_no }}{% endblock %}
+{% block content %}
+<a href="{% url 'delivery_queue' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to deliveries</a>
+<div class="detail-grid">
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Proof of Delivery</h3>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {% include 'core/_form.html' %}
+      <div class="form-actions">
+        <button class="btn btn-ok" data-busy="Confirming &amp; notifying…">{% include 'core/_icon.html' with name='check' %} Confirm Delivered</button>
+        <a href="{% url 'delivery_queue' %}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Order</h3>
+    <dl class="kv">
+      <dt>Customer</dt><dd><b>{{ order.customer }}</b></dd>
+      <dt>Mobile</dt><dd>{{ order.customer.mobile }}</dd>
+      <dt>Address</dt><dd>{{ order.customer.delivery_address|default:"—" }}</dd>
+      <dt>Items</dt><dd>{{ order.total_items|floatformat:0 }} units · {{ order.distinct_items }} lines</dd>
+      <dt>Total</dt><dd><b>{{ site.currency_symbol }}{{ order.total|floatformat:2|intcomma }}</b></dd>
+    </dl>
+    <hr class="sep">
+    <table class="tbl">
+      <tbody>
+        {% for i in order.items.all %}
+        <tr><td>{{ i.product_name }}</td><td class="num">{{ i.quantity|floatformat:0 }} {{ i.unit }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

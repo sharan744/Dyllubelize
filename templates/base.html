@@ -1,0 +1,197 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}UDL Belize{% endblock %} · UDL Belize</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/udl-mark.svg' %}">
+  <link rel="alternate icon" href="{% static 'img/favicon.ico' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+<div class="app">
+  <div class="rail-scrim"></div>
+  <aside class="rail">
+    <div class="brand">
+      <img src="{% static 'img/udl-mark.svg' %}" alt="UDL"
+           style="width:40px;height:40px;border-radius:11px;box-shadow:0 4px 12px rgba(224,96,58,.4)">
+      <div class="name">UDL Belize<small>Distribution &amp; Supply</small></div>
+    </div>
+    <nav class="nav">
+      <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='grid' %} Dashboard
+      </a>
+      <a href="{% url 'catalogue' %}" class="{% if 'catalogue' in request.path and 'categories' not in request.path and 'products' not in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='box' %} Catalogue
+      </a>
+
+      {% if user.is_sales or user.is_team_lead or user.is_admin_role %}
+      <div class="nav-label">Sales</div>
+      {% if user.is_sales or user.is_admin_role %}
+      <a href="{% url 'order_create' %}" class="{% if request.resolver_match.url_name == 'order_create' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='plus' %} New Order
+      </a>
+      {% endif %}
+      <a href="{% url 'customer_list' %}" class="{% if 'customers' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='users' %} Customers
+      </a>
+      {% endif %}
+
+      <a href="{% url 'order_list' %}" class="{% if request.resolver_match.url_name == 'order_list' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='list' %} Orders
+      </a>
+
+      {% if user.is_team_lead or user.is_admin_role %}
+      <a href="{% url 'review_queue' %}" class="{% if request.resolver_match.url_name == 'review_queue' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='check' %} Review Queue
+        {% if nav_counts.review %}<span class="badge">{{ nav_counts.review }}</span>{% endif %}
+      </a>
+      {% endif %}
+      {% if user.is_processing or user.is_admin_role %}
+      <a href="{% url 'processing_queue' %}" class="{% if request.resolver_match.url_name == 'processing_queue' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='cog' %} Processing
+        {% if nav_counts.processing %}<span class="badge">{{ nav_counts.processing }}</span>{% endif %}
+      </a>
+      {% endif %}
+
+      {% if user.is_dispatch or user.is_delivery or user.is_admin_role %}
+      <div class="nav-label">Logistics</div>
+      {% if user.is_dispatch or user.is_admin_role %}
+      <a href="{% url 'dispatch_list' %}" class="{% if 'dispatch' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='truck' %} Dispatch
+        {% if nav_counts.dispatch %}<span class="badge">{{ nav_counts.dispatch }}</span>{% endif %}
+      </a>
+      {% endif %}
+      {% if user.is_delivery or user.is_admin_role %}
+      <a href="{% url 'delivery_queue' %}" class="{% if 'delivery' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='pin' %} Deliveries
+        {% if nav_counts.delivery %}<span class="badge">{{ nav_counts.delivery }}</span>{% endif %}
+      </a>
+      {% endif %}
+      <a href="{% url 'return_list' %}" class="{% if 'returns' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='back' %} Returns
+      </a>
+      {% endif %}
+
+      {% if user.is_processing or user.is_dispatch or user.is_admin_role %}
+      <div class="nav-label">Warehouse</div>
+      <a href="{% url 'inventory_overview' %}" class="{% if request.resolver_match.url_name == 'inventory_overview' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='box' %} Inventory
+        {% if nav_counts.low_stock %}<span class="badge">{{ nav_counts.low_stock }}</span>{% endif %}
+      </a>
+      <a href="{% url 'expiring_soon' %}" class="{% if 'expiring' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='back' %} Expiring Soon
+        {% if nav_counts.expiring %}<span class="badge">{{ nav_counts.expiring }}</span>{% endif %}
+      </a>
+      <a href="{% url 'po_list' %}" class="{% if '/inventory/po' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='file' %} Purchase Orders
+      </a>
+      <a href="{% url 'supplier_list' %}" class="{% if 'suppliers' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='users' %} Suppliers
+      </a>
+      {% endif %}
+
+      {% if user.is_admin_role %}
+      <div class="nav-label">Manage</div>
+      <a href="{% url 'category_list' %}" class="{% if 'categories' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='tag' %} Categories
+      </a>
+      <a href="{% url 'product_list' %}" class="{% if 'products' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='box' %} Products
+      </a>
+      <a href="{% url 'user_list' %}" class="{% if 'users' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='users' %} Users
+      </a>
+      <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='file' %} Reports
+      </a>
+      <a href="{% url 'incentives' %}" class="{% if 'incentives' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='money' %} Incentives
+      </a>
+      <a href="/admin/" target="_blank">
+        {% include 'core/_icon.html' with name='shield' %} Admin &amp; Settings
+      </a>
+
+      <div class="nav-label">Accounting</div>
+      <a href="{% url 'acc_home' %}" class="{% if request.resolver_match.url_name == 'acc_home' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='chart' %} Overview
+      </a>
+      <a href="{% url 'acc_invoice_list' %}" class="{% if 'invoices' in request.path or 'ar-aging' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='file' %} Invoices &amp; A/R
+      </a>
+      <a href="{% url 'acc_payment_list' %}" class="{% if '/payments' in request.path or '/credits' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='money' %} Payments
+      </a>
+      <a href="{% url 'acc_bill_list' %}" class="{% if 'bills' in request.path or 'ap-aging' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='truck' %} Bills &amp; A/P
+      </a>
+      <a href="{% url 'acc_banking' %}" class="{% if 'banking' in request.path or 'reconcile' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='box' %} Banking
+      </a>
+      <a href="{% url 'acc_coa' %}" class="{% if '/coa' in request.path or 'journal' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='list' %} Chart &amp; Journal
+      </a>
+      <a href="{% url 'acc_report_pnl' %}" class="{% if '/reports/pnl' in request.path or 'balance-sheet' in request.path or 'trial-balance' in request.path or '/reports/sales' in request.path or 'budgets' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='chart' %} Financials
+      </a>
+      {% endif %}
+    </nav>
+
+    <div class="rail-foot">
+      <a href="{% url 'profile' %}" class="who" style="text-decoration:none">
+        <div class="av">{{ user.initials }}</div>
+        <div class="meta">
+          <b>{{ user.display_name }}</b>
+          <span>{{ user.get_role_display }}</span>
+        </div>
+      </a>
+      <form method="post" action="{% url 'logout' %}" style="margin-top:10px">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-block"
+          style="background:rgba(255,255,255,.07);color:#fff;border-color:rgba(255,255,255,.12);justify-content:center;gap:9px">
+          {% include 'core/_icon.html' with name='logout' %} Sign out
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn">{% include 'core/_icon.html' with name='menu' %}</button>
+      <div>
+        <h1>{% block heading %}{% block page_title %}{% endblock %}{% endblock %}</h1>
+        {% block subheading %}{% endblock %}
+      </div>
+      <div class="spacer"></div>
+      {% block topbar_actions %}{% endblock %}
+    </header>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+{% if messages %}
+<div class="flashes">
+  {% for m in messages %}
+  <div class="flash {{ m.tags }}">
+    {% include 'core/_icon.html' with name='info' %}
+    <span>{{ m }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script type="module" src="{% static 'js/app.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

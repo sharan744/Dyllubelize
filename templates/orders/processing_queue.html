@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Processing{% endblock %}
+{% block page_title %}Processing Team{% endblock %}
+{% block subheading %}<div class="sub">Confirmed orders to prepare for dispatch</div>{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th class="num">Items</th><th class="num">Total</th><th></th></tr></thead>
+  <tbody>
+    {% for o in orders %}
+    <tr>
+      <td><a href="{% url 'order_detail' o.pk %}" class="ordno">{{ o.order_no }}</a></td>
+      <td>{{ o.customer }}</td>
+      <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
+      <td class="num">{{ o.total_items|floatformat:0 }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
+      <td class="right">
+        <form method="post" action="{% url 'processing_action' o.pk %}" style="display:inline">{% csrf_token %}
+          {% if o.status == 'confirmed' %}
+          <button name="action" value="start" class="btn btn-dark btn-sm">Start Processing</button>
+          {% else %}
+          <button name="action" value="ready" class="btn btn-primary btn-sm">Mark Ready</button>
+          {% endif %}
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='cog' %}<h3>Nothing to process</h3><p>Confirmed orders will appear here.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

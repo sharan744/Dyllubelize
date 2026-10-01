@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Chart of Accounts{% endblock %}
+{% block page_title %}Chart of Accounts{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'acc_journal' %}" class="btn btn-soft btn-sm">General Journal</a>
+<a href="{% url 'acc_account_new' %}" class="btn btn-dark btn-sm">+ New Account</a>
+{% endblock %}
+{% block content %}
+{% for g in groups %}
+<div class="card" style="margin-bottom:16px">
+  <div class="flex" style="justify-content:space-between;align-items:baseline">
+    <h3 style="margin:0">{{ g.label }}</h3>
+    <b class="num">{{ sym }}{{ g.subtotal|floatformat:2|intcomma }}</b>
+  </div>
+  <div class="table-wrap" style="margin-top:8px"><table class="tbl">
+    <thead><tr><th>Code</th><th>Account</th><th></th><th class="num">Balance</th></tr></thead>
+    <tbody>
+      {% for r in g.rows %}
+      <tr>
+        <td class="mono">{{ r.a.code }}</td>
+        <td><a href="{% url 'acc_account_ledger' r.a.pk %}">{{ r.a.name }}</a>{% if r.a.parent %} <span class="small muted">↳ {{ r.a.parent.name }}</span>{% endif %}</td>
+        <td>{% if r.a.is_bank %}<span class="chip">Bank</span>{% endif %}{% if not r.a.is_active %}<span class="chip">Inactive</span>{% endif %}</td>
+        <td class="num">{{ sym }}{{ r.bal|floatformat:2|intcomma }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="muted small">No accounts.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endfor %}
+{% endblock %}

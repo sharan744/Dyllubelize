@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+{% block title %}Delivery Document {{ dispatch.dispatch_no }}{% endblock %}
+{% block extra_css %}
+<style>
+/* A4 delivery / dispatch document — inlined so print styles always load fresh */
+.doc-page {
+  --dk: #1b1a24; --ac: #e0603a; --ln: #d9d2c4; --sf: #6b6577;
+  max-width: 820px; margin: 20px auto; background: #fff; color: #222;
+  padding: 40px 46px; box-shadow: 0 10px 40px rgba(0,0,0,.12);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif; font-size: 13px;
+}
+.doc-toolbar { max-width: 820px; margin: 20px auto 0; display: flex; gap: 10px; justify-content: flex-end; }
+.doc-head { display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 3px solid var(--dk); padding-bottom: 18px; margin-bottom: 22px; }
+.doc-head .co h1 { font-size: 1.5rem; margin: 0; color: var(--dk); }
+.doc-head .co .tag { color: var(--ac); font-weight: 700; font-size: .8rem; letter-spacing: .06em;
+  text-transform: uppercase; }
+.doc-head .co .info { color: var(--sf); font-size: .78rem; margin-top: 8px; line-height: 1.6; }
+.doc-head .meta { text-align: right; }
+.doc-head .meta .title { font-size: 1.05rem; font-weight: 800; color: var(--ac); text-transform: uppercase;
+  letter-spacing: .05em; }
+.doc-head .meta .dno { font-family: monospace; font-size: 1.3rem; font-weight: 800; color: var(--dk); }
+.doc-head .meta table { margin-top: 8px; margin-left: auto; font-size: .8rem; }
+.doc-head .meta td { padding: 2px 0 2px 12px; color: var(--sf); }
+.doc-head .meta td b { color: var(--dk); }
+.doc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 20px; }
+.doc-box { border: 1px solid var(--ln); border-radius: 8px; padding: 14px 16px; }
+.doc-box h4 { margin: 0 0 8px; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ac); }
+.doc-box p { margin: 0; line-height: 1.55; }
+.doc-box .big { font-weight: 700; font-size: .95rem; color: var(--dk); }
+table.doc-tbl { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+table.doc-tbl th { background: var(--dk); color: #fff; padding: 9px 11px; text-align: left; font-size: .72rem;
+  text-transform: uppercase; letter-spacing: .04em; }
+table.doc-tbl th.num, table.doc-tbl td.num { text-align: right; }
+table.doc-tbl td { padding: 9px 11px; border-bottom: 1px solid var(--ln); }
+table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
+table.doc-tbl tfoot td { font-weight: 800; padding: 11px; border-top: 2px solid var(--dk); }
+.order-group-head td { background: #f0ebe0; font-weight: 700; color: var(--dk); font-size: .8rem; }
+.doc-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+.sign { border-top: 1.5px solid var(--dk); padding-top: 8px; font-size: .78rem; color: var(--sf); }
+.sign .sp { height: 46px; }
+.doc-note { font-size: .74rem; color: var(--sf); text-align: center; margin-top: 30px;
+  border-top: 1px solid var(--ln); padding-top: 12px; }
+
+@media print {
+  body { background: #fff !important; }
+  /* Hide the app chrome but KEEP the .app/.main ancestors visible,
+     otherwise the document nested inside them would not print. */
+  .rail, .topbar, .doc-toolbar, .flashes, .menu-btn, .rail-scrim { display: none !important; }
+  .app { display: block !important; }
+  .main { display: block !important; }
+  .content { padding: 0 !important; max-width: none !important; }
+  .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 0; }
+  @page { size: A4; margin: 14mm; }
+}
+</style>
+{% endblock %}
+{% block page_title %}Delivery Document{% endblock %}
+{% block topbar_actions %}
+<button onclick="window.print()" class="btn btn-primary">{% include 'core/_icon.html' with name='print' %} Print / Save PDF</button>
+{% endblock %}
+
+{% block content %}
+<div class="doc-toolbar">
+  <a href="{% url 'dispatch_detail' dispatch.pk %}" class="btn btn-ghost btn-sm">Back</a>
+  <button onclick="window.print()" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='print' %} Print / Save as PDF</button>
+</div>
+
+<div class="doc-page">
+  <!-- Header -->
+  <div class="doc-head">
+    <div class="co">
+      <div class="tag">{{ site.tagline }}</div>
+      <h1>{{ site.company_name }}</h1>
+      <div class="info">
+        {% if site.address %}{{ site.address|linebreaksbr }}<br>{% endif %}
+        {% if site.phone %}Tel: {{ site.phone }} · {% endif %}{% if site.email %}{{ site.email }}{% endif %}
+        {% if site.tax_id %}<br>RFC: {{ site.tax_id }}{% endif %}
+      </div>
+    </div>
+    <div class="meta">
+      <div class="title">Delivery Note</div>
+      <div class="dno">{{ dispatch.dispatch_no }}</div>
+      <table>
+        <tr><td>Dispatch date:</td><td><b>{{ dispatch.dispatch_date|date:"d M Y" }}</b></td></tr>
+        {% if dispatch.expected_delivery_date %}<tr><td>Expected delivery:</td><td><b>{{ dispatch.expected_delivery_date|date:"d M Y" }}</b></td></tr>{% endif %}
+        <tr><td>Total orders:</td><td><b>{{ dispatch.order_count }}</b></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Vehicle / driver -->
+  <div class="doc-cols">
+    <div class="doc-box">
+      <h4>Vehicle &amp; Driver</h4>
+      <p class="big">{{ dispatch.vehicle_details|default:"—" }}</p>
+      <p>{{ dispatch.driver_name|default:"Driver not assigned" }}{% if dispatch.driver_contact %} · {{ dispatch.driver_contact }}{% endif %}</p>
+    </div>
+    <div class="doc-box">
+      <h4>Delivery Instructions</h4>
+      <p>{{ dispatch.special_instructions|default:"—"|linebreaksbr }}</p>
+    </div>
+  </div>
+
+  <!-- Per order -->
+  {% for o in dispatch.orders.all %}
+  <table class="doc-tbl">
+    <thead>
+      <tr class="order-group-head"><td colspan="4">
+        Order {{ o.order_no }} — {{ o.customer.company_name|default:o.customer.name }}
+        · {{ o.customer.mobile }}
+        {% if o.customer.delivery_address %}<br><span style="font-weight:400">Deliver to: {{ o.customer.delivery_address }}</span>{% endif %}
+      </td></tr>
+      <tr><th style="width:48%">Product</th><th>SKU</th><th>Unit</th><th class="num">Quantity</th></tr>
+    </thead>
+    <tbody>
+      {% for i in o.items.all %}
+      <tr><td>{{ i.product_name }}</td><td>{{ i.sku }}</td><td>{{ i.unit }}</td><td class="num">{{ i.quantity|floatformat:0 }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="3">Total items for this order</td><td class="num">{{ o.total_items|floatformat:0 }}</td></tr>
+    </tfoot>
+  </table>
+  {% endfor %}
+
+  <div class="doc-box" style="background:#faf7f1">
+    <div class="flex" style="justify-content:space-between">
+      <b>Grand total — all orders in this dispatch</b>
+      <b style="font-size:1.1rem">{{ dispatch.total_items|floatformat:0 }} items across {{ dispatch.order_count }} order(s)</b>
+    </div>
+  </div>
+
+  <!-- Signatures -->
+  <div class="doc-foot">
+    <div>
+      <div class="sp"></div>
+      <div class="sign">Dispatched by (name &amp; signature)</div>
+    </div>
+    <div>
+      <div class="sp"></div>
+      <div class="sign">Received by — customer acknowledgement (name, signature &amp; date)</div>
+    </div>
+  </div>
+
+  <div class="doc-note">
+    This is a system-generated delivery note from Flujo · {{ site.company_name }}.
+    Goods received in good condition unless noted above.
+  </div>
+</div>
+{% endblock %}

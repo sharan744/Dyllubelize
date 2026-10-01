@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 84" width="360" height="84" role="img" aria-label="United Distributors Ltd — Belize">
+  <defs>
+    <linearGradient id="udlg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0603a"/>
+      <stop offset="1" stop-color="#caa04e"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(4,10)">
+    <rect x="0" y="0" width="64" height="64" rx="15" fill="url(#udlg2)"/>
+    <g fill="#ffffff">
+      <rect x="14" y="35" width="9" height="15" rx="2.5" opacity="0.92"/>
+      <rect x="27.5" y="27" width="9" height="23" rx="2.5" opacity="0.96"/>
+      <rect x="41" y="19" width="9" height="31" rx="2.5"/>
+    </g>
+    <path d="M15 15.5 L37 15.5" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+    <path d="M33 11.5 L38 15.5 L33 19.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+  </g>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <text x="84" y="35" font-size="26" font-weight="800" fill="#17161f" letter-spacing="0.5">United Distributors</text>
+    <text x="85" y="58" font-size="12.5" font-weight="700" fill="#b6431f" letter-spacing="3">LTD · BELIZE · UDL.BZ</text>
+  </g>
+</svg>

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Inventory{% endblock %}
+{% block page_title %}Inventory{% endblock %}
+{% block subheading %}<div class="sub">Stock levels, reorder alerts &amp; valuation</div>{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'po_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Purchase Order</a>
+{% endblock %}
+{% block content %}
+<div class="grid grid-3" style="margin-bottom:20px">
+  <div class="stat t-ink"><div class="k">Tracked Products</div><div class="v">{{ products|length }}</div></div>
+  <div class="stat t-amber"><div class="k">Need Reorder</div><div class="v">{{ low_count }}</div></div>
+  <div class="stat t-teal"><div class="k">Stock Value (cost)</div><div class="v" style="font-size:1.5rem">{{ site.currency_symbol }}{{ total_value|floatformat:2|intcomma }}</div></div>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="search-box grow">{% include 'core/_icon.html' with name='search' %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search products…"></div>
+  <label class="check"><input type="checkbox" name="low" value="1" onchange="this.form.submit()" {% if only_low %}checked{% endif %}> Low stock only</label>
+  <button class="btn btn-dark">Filter</button>
+</form>
+
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Product</th><th class="num">In stock</th><th class="num">Reorder pt</th><th class="num">Cost</th><th class="num">Value</th><th>Status</th><th>Quick stock-in</th></tr></thead>
+  <tbody>
+    {% for p in products %}
+    <tr>
+      <td><b>{{ p.name }}</b><div class="mono small muted">{{ p.sku }}</div></td>
+      <td class="num"><b>{{ p.stock_qty|floatformat:0 }}</b> <span class="small muted">{{ p.unit_label }}</span>
+        {% if p.is_perishable %}<div class="small" style="color:#b8791b">{% if p.nearest_expiry %}exp {{ p.nearest_expiry|date:"d M Y" }}{% else %}perishable{% endif %}</div>{% endif %}</td>
+      <td class="num">{{ p.reorder_point|floatformat:0 }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ p.cost_price|floatformat:2 }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ p.stock_value|floatformat:2|intcomma }}</td>
+      <td>{% if p.out_of_stock %}<span class="pill rejected"><span class="dot"></span>Out</span>{% elif p.needs_reorder %}<span class="pill review"><span class="dot"></span>Reorder</span>{% else %}<span class="pill dispatched"><span class="dot"></span>OK</span>{% endif %}</td>
+      <td>
+        <form method="post" action="{% url 'stock_adjust' %}" class="flex" style="gap:6px">
+          {% csrf_token %}
+          <input type="hidden" name="product" value="{{ p.pk }}">
+          <input type="hidden" name="action" value="add">
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <input type="number" name="qty" min="1" step="1" placeholder="Qty" style="width:74px;padding:6px 8px">
+          {% if p.is_perishable %}<input type="date" name="expiry" title="Expiry date of this batch" style="padding:6px 8px">{% endif %}
+          <button class="btn btn-soft btn-sm">Add</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% include 'core/_icon.html' with name='box' %}<h3>No products</h3><p>Only stock-tracked products appear here.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

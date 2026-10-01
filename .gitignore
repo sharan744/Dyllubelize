@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.seeded
+db.sqlite3
+media/products/*
+media/pod/*
+staticfiles/

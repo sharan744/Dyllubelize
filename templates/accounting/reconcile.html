@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Reconcile{% endblock %}
+{% block page_title %}Bank Reconciliation{% endblock %}
+{% block content %}
+<a href="{% url 'acc_banking' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to banking</a>
+<form method="get" class="toolbar" style="margin-bottom:16px">
+  <label class="small muted">Account
+    <select name="account" onchange="this.form.submit()">
+      <option value="">— choose bank —</option>
+      {% for a in bank_accounts %}<option value="{{ a.id }}" {% if account and a.id == account.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if account %}<span class="chip" style="margin-left:auto">Cleared balance: <b>{{ sym }}{{ cleared|floatformat:2|intcomma }}</b></span>{% endif %}
+</form>
+
+{% if account %}
+<form method="post" class="card">{% csrf_token %}
+  <input type="hidden" name="save_marks" value="1">
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th style="width:40px">✓</th><th>Date</th><th>Entry</th><th>Memo</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+    <tbody>
+      {% for l in lines %}
+      <tr>
+        <td><input type="checkbox" name="line" value="{{ l.id }}" {% if l.reconciled %}checked{% endif %} style="width:auto"></td>
+        <td>{{ l.entry.date|date:"d M Y" }}</td>
+        <td class="mono small">{{ l.entry.entry_no }}</td>
+        <td class="muted">{{ l.memo|default:l.entry.memo }}</td>
+        <td class="num">{% if l.debit %}{{ sym }}{{ l.debit|floatformat:2|intcomma }}{% endif %}</td>
+        <td class="num">{% if l.credit %}{{ sym }}{{ l.credit|floatformat:2|intcomma }}{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty"><p>No transactions on this account.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="form-actions" style="padding:14px"><button class="btn btn-primary" data-busy>Save reconciliation</button></div>
+</form>
+{% endif %}
+{% endblock %}

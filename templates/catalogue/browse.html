@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Catalogue{% endblock %}
+{% block page_title %}Product Catalogue{% endblock %}
+{% block subheading %}<div class="sub">{{ products|length }} product(s) available</div>{% endblock %}
+{% block topbar_actions %}
+  {% if user.is_admin_role %}
+  <a href="{% url 'product_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add Product</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<form method="get" class="toolbar">
+  <div class="search-box grow">
+    {% include 'core/_icon.html' with name='search' %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search products by name or SKU…">
+  </div>
+  <select name="category" onchange="this.form.submit()">
+    <option value="">All categories</option>
+    {% for c in categories %}
+    <option value="{{ c.slug }}" {% if active_cat == c.slug %}selected{% endif %}>{{ c.name }} ({{ c.active_product_count }})</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-dark">Filter</button>
+</form>
+
+{% if products %}
+<div class="prod-grid">
+  {% for p in products %}
+  <a class="prod" href="{% url 'product_detail' p.pk %}" style="text-decoration:none;color:inherit">
+    <div class="thumb">
+      {% if p.image %}<img src="{{ p.image.url }}" alt="{{ p.name }}">
+      {% else %}{% include 'core/_icon.html' with name='box' %}{% endif %}
+      <span class="cat-tag chip" style="background:#fff">{{ p.category.name }}</span>
+    </div>
+    <div class="body">
+      <div class="nm">{{ p.name }}</div>
+      <div class="sk">{{ p.sku }}{% if p.brand %} · {{ p.brand }}{% endif %} · {{ p.unit_label }}</div>
+      <div class="pr"><b>{{ site.currency_symbol }}{{ p.selling_price|floatformat:2|intcomma }}</b><span>/ {{ p.unit_label }}</span></div>
+      {% if p.track_stock %}<div class="small muted" style="margin-top:4px">Stock: {{ p.stock_qty|floatformat:0 }}</div>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">
+  {% include 'core/_icon.html' with name='box' %}
+  <h3>No products found</h3>
+  <p>Try a different search or category.</p>
+</div></div>
+{% endif %}
+{% endblock %}

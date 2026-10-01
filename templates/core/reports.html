@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block subheading %}<div class="sub">Sales &amp; inventory reports · {{ start|date:"d M Y" }} – {{ end|date:"d M Y" }}</div>{% endblock %}
+
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:20px">
+  <label class="small muted">From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label class="small muted">To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark">Apply</button>
+  <span class="chip" style="margin-left:auto">Total sales: <b>{{ site.currency_symbol }}{{ grand|floatformat:2|intcomma }}</b></span>
+</form>
+
+<div style="columns:2;column-gap:18px" class="rpt-cols">
+  {% for block in blocks %}
+  <div class="card" style="break-inside:avoid;width:100%;margin-bottom:18px;display:inline-block">
+    <div class="card-head"><h3>{{ block.title }}</h3><div class="spacer"></div>
+      <a href="{% url 'report_export' block.kind %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}" class="btn btn-soft btn-sm">Export CSV</a></div>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>{{ block.col1 }}</th><th class="num">{{ block.col2 }}</th><th class="num">{{ block.col3 }}</th></tr></thead>
+      <tbody>
+        {% for r in block.rows %}
+        <tr>
+          <td>{{ r.0 }}{% if r.3 %}<div class="mono small muted">{{ r.3 }}</div>{% endif %}</td>
+          <td class="num">{{ r.1 }}</td>
+          <td class="num"><b>{{ r.2 }}</b></td>
+        </tr>
+        {% empty %}<tr><td colspan="3"><div class="empty"><p>No data in this range.</p></div></td></tr>{% endfor %}
+      </tbody>
+      {% if block.total %}<tfoot><tr><td><b>Total</b></td><td></td><td class="num"><b>{{ block.total }}</b></td></tr></tfoot>{% endif %}
+    </table></div>
+  </div>
+  {% endfor %}
+</div>
+
+<style>@media (max-width:720px){ .rpt-cols{ columns:1 !important; } }</style>
+{% endblock %}

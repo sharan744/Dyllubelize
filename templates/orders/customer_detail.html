@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ customer.label }}{% endblock %}
+{% block page_title %}{{ customer.company_name|default:customer.name }}{% endblock %}
+{% block topbar_actions %}
+  {% if user.is_sales or user.is_admin_role %}
+  <a href="{% url 'order_create' %}?customer={{ customer.pk }}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New Order</a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<a href="{% url 'customer_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to customers</a>
+<div class="detail-grid">
+  <div class="card">
+    <div class="card-head"><h3>Order History</h3><div class="spacer"></div><span class="chip">{{ customer.order_count }} order(s)</span></div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Order</th><th>Status</th><th class="num">Total</th><th>Date</th></tr></thead>
+        <tbody>
+          {% for o in orders %}
+          <tr onclick="location.href='{% url 'order_detail' o.pk %}'" style="cursor:pointer">
+            <td><span class="ordno">{{ o.order_no }}</span></td>
+            <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
+            <td class="num">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
+            <td class="small muted">{{ o.created_at|date:"d M Y" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4"><div class="empty"><p>No orders yet for this customer.</p></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Details</h3>
+    <dl class="kv">
+      <dt>Name</dt><dd>{{ customer.name }}</dd>
+      {% if customer.company_name %}<dt>Company</dt><dd>{{ customer.company_name }}</dd>{% endif %}
+      {% if customer.contact_person %}<dt>Contact</dt><dd>{{ customer.contact_person }}</dd>{% endif %}
+      <dt>Mobile</dt><dd>{{ customer.mobile }}</dd>
+      {% if customer.email %}<dt>Email</dt><dd>{{ customer.email }}</dd>{% endif %}
+      {% if customer.billing_address %}<dt>Billing</dt><dd>{{ customer.billing_address }}</dd>{% endif %}
+      {% if customer.delivery_address %}<dt>Delivery</dt><dd>{{ customer.delivery_address }}</dd>{% endif %}
+      {% if customer.tax_id %}<dt>Tax ID</dt><dd>{{ customer.tax_id }}</dd>{% endif %}
+      {% if customer.notes %}<dt>Notes</dt><dd>{{ customer.notes }}</dd>{% endif %}
+    </dl>
+  </div>
+</div>
+{% endblock %}

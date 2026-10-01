@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}New Invoice{% endblock %}
+{% block page_title %}New Invoice{% endblock %}
+{% block content %}
+<a href="{% url 'acc_invoice_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to invoices</a>
+<form method="post" class="card card-pad">{% csrf_token %}
+  <div class="grid grid-3" style="gap:12px">
+    <div class="field"><label>Customer</label>{{ form.customer }}</div>
+    <div class="field"><label>Date</label>{{ form.date }}</div>
+    <div class="field"><label>Terms (days)</label>{{ form.terms_days }}</div>
+    <div class="field"><label>Tax %</label>{{ form.tax_percent }}</div>
+    <div class="field" style="grid-column:span 2"><label>Memo</label>{{ form.memo }}</div>
+  </div>
+  {% for e in form.non_field_errors %}<div class="err">{{ e }}</div>{% endfor %}
+
+  <div class="table-wrap" style="margin-top:10px"><table class="tbl" id="inv-lines">
+    <thead><tr><th style="width:50%">Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <button type="button" class="btn btn-soft btn-sm" id="add-line">+ Add line</button>
+
+  <div class="flex" style="justify-content:flex-end;margin-top:14px"><div>Subtotal: <b id="sub">$0.00</b></div></div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" data-busy>Create & Post Invoice</button>
+    <a href="{% url 'acc_invoice_list' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+<script>
+(function(){
+  const sym="{{ sym|escapejs }}";
+  const tbody=document.querySelector('#inv-lines tbody');
+  function money(n){return sym+(Math.round((+n||0)*100)/100).toFixed(2);}
+  function addRow(){
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><input type="text" name="desc"></td>'+
+      '<td class="num"><input type="number" step="0.01" min="0" name="qty" value="1" class="q" style="width:80px"></td>'+
+      '<td class="num"><input type="number" step="0.01" min="0" name="price" value="0" class="p" style="width:110px"></td>'+
+      '<td class="num amt">'+money(0)+'</td>'+
+      '<td><button type="button" class="rm">✕</button></td>';
+    tbody.appendChild(tr);
+  }
+  function recalc(){
+    let sub=0;
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      const a=(+tr.querySelector('.q').value||0)*(+tr.querySelector('.p').value||0);
+      tr.querySelector('.amt').textContent=money(a); sub+=a;
+    });
+    document.getElementById('sub').textContent=money(sub);
+  }
+  document.getElementById('add-line').addEventListener('click',addRow);
+  tbody.addEventListener('input',recalc);
+  tbody.addEventListener('click',e=>{if(e.target.classList.contains('rm')){e.target.closest('tr').remove();recalc();}});
+  addRow();
+})();
+</script>
+{% endblock %}

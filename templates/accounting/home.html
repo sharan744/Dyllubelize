@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Accounting{% endblock %}
+{% block page_title %}Accounting Overview{% endblock %}
+{% block subheading %}<div class="sub">{{ month_label }} · General ledger, receivables, payables & financials</div>{% endblock %}
+{% block content %}
+
+{% if needs_seed %}
+<div class="card" style="margin-bottom:20px;border-left:4px solid var(--terra,#e0603a)">
+  <h3 style="margin:0 0 6px">Set up your books</h3>
+  <p class="muted small" style="margin:0 0 12px">Create the Chart of Accounts and (optionally) generate invoices from your delivered orders so the ledger reflects real trading history.</p>
+  <a href="{% url 'acc_setup' %}" class="btn btn-dark">Set up accounting →</a>
+</div>
+{% endif %}
+
+<div class="grid grid-3" style="margin-bottom:16px">
+  <div class="stat t-teal"><div class="k">Cash & Bank</div><div class="v" style="font-size:1.5rem">{{ sym }}{{ cash|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-ink"><div class="k">Accounts Receivable</div><div class="v" style="font-size:1.5rem">{{ sym }}{{ ar|floatformat:2|intcomma }}</div><div class="small" style="color:#e03131">{{ sym }}{{ overdue_ar|floatformat:2|intcomma }} overdue</div></div>
+  <div class="stat t-amber"><div class="k">Accounts Payable</div><div class="v" style="font-size:1.5rem">{{ sym }}{{ ap|floatformat:2|intcomma }}</div></div>
+</div>
+
+<div class="grid grid-3" style="margin-bottom:22px">
+  <div class="stat t-green"><div class="k">Income ({{ month_label }})</div><div class="v" style="font-size:1.4rem">{{ sym }}{{ income|floatformat:2|intcomma }}</div></div>
+  <div class="stat t-ink"><div class="k">Expenses ({{ month_label }})</div><div class="v" style="font-size:1.4rem">{{ sym }}{{ expense|floatformat:2|intcomma }}</div></div>
+  <div class="stat {% if net >= 0 %}t-green{% else %}t-amber{% endif %}"><div class="k">Net Profit ({{ month_label }})</div><div class="v" style="font-size:1.4rem">{{ sym }}{{ net|floatformat:2|intcomma }}</div></div>
+</div>
+
+<div class="grid grid-2" style="gap:16px;margin-bottom:22px">
+  <div class="card">
+    <h3 style="margin-top:0">Quick actions</h3>
+    <div class="flex" style="flex-wrap:wrap;gap:8px">
+      <a href="{% url 'acc_invoice_new' %}" class="btn btn-soft btn-sm">+ Invoice</a>
+      <a href="{% url 'acc_payment_new' %}" class="btn btn-soft btn-sm">+ Receive Payment</a>
+      <a href="{% url 'acc_bill_new' %}" class="btn btn-soft btn-sm">+ Enter Bill</a>
+      <a href="{% url 'acc_bill_payment_new' %}" class="btn btn-soft btn-sm">+ Pay Bills</a>
+      <a href="{% url 'acc_credit_new' %}" class="btn btn-soft btn-sm">+ Credit Note</a>
+      <a href="{% url 'acc_journal_new' %}" class="btn btn-soft btn-sm">+ Journal Entry</a>
+    </div>
+    <h3 style="margin:18px 0 8px">Reports</h3>
+    <div class="flex" style="flex-wrap:wrap;gap:8px">
+      <a href="{% url 'acc_report_pnl' %}" class="btn btn-soft btn-sm">Profit & Loss</a>
+      <a href="{% url 'acc_report_bs' %}" class="btn btn-soft btn-sm">Balance Sheet</a>
+      <a href="{% url 'acc_report_tb' %}" class="btn btn-soft btn-sm">Trial Balance</a>
+      <a href="{% url 'acc_report_sales' %}" class="btn btn-soft btn-sm">Sales Reports</a>
+      <a href="{% url 'acc_ar_aging' %}" class="btn btn-soft btn-sm">A/R Aging</a>
+      <a href="{% url 'acc_ap_aging' %}" class="btn btn-soft btn-sm">A/P Aging</a>
+      <a href="{% url 'acc_budgets' %}" class="btn btn-soft btn-sm">Budgets</a>
+      <a href="{% url 'accounting' %}" class="btn btn-soft btn-sm">Revenue Analytics</a>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Open items</h3>
+    <table class="tbl">
+      <tr><td>Open invoices</td><td class="num"><b>{{ open_inv_count }}</b></td></tr>
+      <tr><td>Overdue receivable</td><td class="num" style="color:#e03131"><b>{{ sym }}{{ overdue_ar|floatformat:2|intcomma }}</b></td></tr>
+      <tr><td>Unpaid bills</td><td class="num"><b>{{ open_bill_count }}</b></td></tr>
+      <tr><td>Payable outstanding</td><td class="num"><b>{{ sym }}{{ open_bill_total|floatformat:2|intcomma }}</b></td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card"><h3 style="margin-top:0">Recent journal entries</h3>
+<div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Entry</th><th>Date</th><th>Type</th><th>Memo</th><th class="num">Debit</th></tr></thead>
+  <tbody>
+    {% for je in recent %}
+    <tr>
+      <td><b>{{ je.entry_no }}</b></td><td>{{ je.date|date:"d M Y" }}</td>
+      <td><span class="chip">{{ je.get_source_display }}</span></td>
+      <td class="muted">{{ je.memo }}</td>
+      <td class="num">{{ sym }}{{ je.total_debit|floatformat:2|intcomma }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5"><div class="empty"><p>No journal entries yet.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+<p style="margin:12px 0 0"><a href="{% url 'acc_journal' %}" class="small">View full general journal →</a></p>
+</div>
+{% endblock %}

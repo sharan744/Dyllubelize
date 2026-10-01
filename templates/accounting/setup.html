@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Set up accounting{% endblock %}
+{% block page_title %}Set up Accounting{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px">
+  <p>This creates a standard <b>Chart of Accounts</b> (assets, liabilities, equity, income and expenses) tailored for a distributor.</p>
+  <form method="post">
+    {% csrf_token %}
+    <label class="flex" style="gap:10px;align-items:flex-start;margin:16px 0">
+      <input type="checkbox" name="backfill" value="1" checked style="width:auto;margin-top:3px">
+      <span>Generate invoices from delivered/completed orders, so receivables, sales income and cost of goods sold reflect your trading history.</span>
+    </label>
+    <button class="btn btn-dark" data-busy>Build my books</button>
+  </form>
+</div>
+{% endblock %}

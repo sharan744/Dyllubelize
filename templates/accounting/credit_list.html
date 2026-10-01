@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Credit Notes{% endblock %}
+{% block page_title %}Credit Notes{% endblock %}
+{% block topbar_actions %}<a href="{% url 'acc_credit_new' %}" class="btn btn-dark btn-sm">+ New Credit Note</a>{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Number</th><th>Customer</th><th>Date</th><th>Reason</th><th class="num">Amount</th><th class="num">Remaining</th></tr></thead>
+  <tbody>
+    {% for c in notes %}
+    <tr>
+      <td><b>{{ c.number }}</b></td><td>{{ c.customer }}</td><td>{{ c.date|date:"d M Y" }}</td>
+      <td class="muted">{{ c.reason }}</td>
+      <td class="num">{{ sym }}{{ c.amount|floatformat:2|intcomma }}</td>
+      <td class="num">{{ sym }}{{ c.remaining|floatformat:2|intcomma }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6"><div class="empty"><p>No credit notes yet.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

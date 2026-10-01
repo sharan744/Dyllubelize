@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}My Profile{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+{% block content %}
+<div class="detail-grid">
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Change Password</h3>
+    <form method="post">{% csrf_token %}
+      {% include 'core/_form.html' %}
+      <div class="form-actions"><button class="btn btn-primary">Update Password</button></div>
+    </form>
+  </div>
+  <div class="card card-pad">
+    <h3 style="margin-bottom:12px">Account</h3>
+    <dl class="kv">
+      <dt>Name</dt><dd>{{ user.display_name }}</dd>
+      <dt>Username</dt><dd class="mono">{{ user.username }}</dd>
+      <dt>Role</dt><dd><span class="chip">{{ user.get_role_display }}</span></dd>
+      <dt>Email</dt><dd>{{ user.email|default:"—" }}</dd>
+    </dl>
+  </div>
+</div>
+{% endblock %}

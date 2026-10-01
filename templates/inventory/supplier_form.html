@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<a href="{% url 'supplier_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to suppliers</a>
+<div class="card card-pad" style="max-width:640px">
+  <form method="post">{% csrf_token %}
+    {% include 'core/_form.html' %}
+    <div class="form-actions">
+      <button class="btn btn-primary">Save Supplier</button>
+      <a href="{% url 'supplier_list' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

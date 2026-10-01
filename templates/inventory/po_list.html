@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Purchase Orders{% endblock %}
+{% block page_title %}Purchase Orders{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'po_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New PO</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>PO</th><th>Supplier</th><th>Order date</th><th class="num">Items</th><th class="num">Cost</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for po in pos %}
+    <tr onclick="location.href='{% url 'po_detail' po.pk %}'" style="cursor:pointer">
+      <td><span class="ordno">{{ po.po_no }}</span></td>
+      <td>{{ po.supplier.name }}</td>
+      <td class="small">{{ po.order_date|date:"d M Y" }}</td>
+      <td class="num">{{ po.total_qty|floatformat:0 }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ po.total_cost|floatformat:2|intcomma }}</td>
+      <td>{% if po.status == 'received' %}<span class="pill delivered"><span class="dot"></span>Received</span>{% elif po.status == 'ordered' %}<span class="pill confirmed"><span class="dot"></span>Ordered</span>{% elif po.status == 'cancelled' %}<span class="pill rejected"><span class="dot"></span>Cancelled</span>{% else %}<span class="pill draft"><span class="dot"></span>Draft</span>{% endif %}</td>
+      <td class="right"><a href="{% url 'po_detail' po.pk %}" class="btn btn-soft btn-sm">Open</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% include 'core/_icon.html' with name='file' %}<h3>No purchase orders</h3><p>Raise a PO to bring stock in from a supplier.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

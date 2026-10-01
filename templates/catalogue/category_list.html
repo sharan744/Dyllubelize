@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Categories{% endblock %}
+{% block page_title %}Categories{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'category_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add Category</a>
+{% endblock %}
+{% block content %}
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Category</th><th>Products</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for c in categories %}
+    <tr>
+      <td><b>{{ c.name }}</b>{% if c.description %}<div class="small muted">{{ c.description|truncatewords:12 }}</div>{% endif %}</td>
+      <td>{{ c.active_product_count }} active</td>
+      <td>{% if c.is_active %}<span class="pill dispatched"><span class="dot"></span>Active</span>{% else %}<span class="pill draft"><span class="dot"></span>Inactive</span>{% endif %}</td>
+      <td class="right">
+        <a href="{% url 'category_edit' c.pk %}" class="btn btn-soft btn-sm">Edit</a>
+        <a href="{% url 'category_toggle' c.pk %}" class="btn btn-ghost btn-sm">{% if c.is_active %}Deactivate{% else %}Activate{% endif %}</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4"><div class="empty"><h3>No categories yet</h3><p>Add your first category to start building the catalogue.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

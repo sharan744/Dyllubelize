@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}New Account{% endblock %}
+{% block page_title %}New Account{% endblock %}
+{% block content %}
+<a href="{% url 'acc_coa' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to Chart of Accounts</a>
+<div class="card card-pad" style="max-width:560px">
+  <form method="post">{% csrf_token %}
+    {% include 'core/_form.html' %}
+    <div class="form-actions">
+      <button class="btn btn-primary">Save Account</button>
+      <a href="{% url 'acc_coa' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

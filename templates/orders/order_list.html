@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Orders{% endblock %}
+{% block page_title %}Orders{% endblock %}
+{% block subheading %}<div class="sub">{{ orders|length }} order(s){% if user.is_sales %} · your orders{% endif %}</div>{% endblock %}
+{% block topbar_actions %}
+  {% if user.is_sales or user.is_admin_role %}
+  <a href="{% url 'order_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New Order</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<form method="get" class="toolbar">
+  <div class="search-box grow">
+    {% include 'core/_icon.html' with name='search' %}
+    <input type="search" name="q" value="{{ f.q }}" placeholder="Order ID or customer…">
+  </div>
+  <select name="status">
+    <option value="">All statuses</option>
+    {% for val, label in statuses %}<option value="{{ val }}" {% if f.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  {% if not user.is_sales %}
+  <select name="salesperson">
+    <option value="">All salespeople</option>
+    {% for sp in salespeople %}<option value="{{ sp.pk }}" {% if f.salesperson == sp.pk|stringformat:'s' %}selected{% endif %}>{{ sp.display_name }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <input type="date" name="date" value="{{ f.date }}">
+  <button class="btn btn-dark">Filter</button>
+  <a href="{% url 'order_list' %}" class="btn btn-ghost">Reset</a>
+</form>
+
+<div class="card"><div class="table-wrap">
+<table class="tbl">
+  <thead><tr><th>Order</th><th>Customer</th><th>Salesperson</th><th>Status</th><th class="num">Items</th><th class="num">Total</th><th>Date</th></tr></thead>
+  <tbody>
+    {% for o in orders %}
+    <tr onclick="location.href='{% url 'order_detail' o.pk %}'" style="cursor:pointer">
+      <td><span class="ordno">{{ o.order_no }}</span></td>
+      <td>{{ o.customer }}</td>
+      <td class="small">{{ o.salesperson.display_name|default:"—" }}</td>
+      <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
+      <td class="num">{{ o.total_items|floatformat:0 }}</td>
+      <td class="num"><b>{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</b></td>
+      <td class="small muted">{{ o.created_at|date:"d M Y" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% include 'core/_icon.html' with name='list' %}<h3>No orders found</h3><p>Adjust your filters or create a new order.</p></div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div></div>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="flex" style="justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:10px">
+  <span class="small muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} order(s)</span>
+  <div class="flex" style="gap:8px">
+    {% if page_obj.has_previous %}
+      <a class="btn btn-soft btn-sm" href="?{{ querystring }}&page=1">« First</a>
+      <a class="btn btn-soft btn-sm" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">‹ Prev</a>
+    {% endif %}
+    {% if page_obj.has_next %}
+      <a class="btn btn-soft btn-sm" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Next ›</a>
+      <a class="btn btn-soft btn-sm" href="?{{ querystring }}&page={{ page_obj.paginator.num_pages }}">Last »</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

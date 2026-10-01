@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<a href="{% url 'product_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to products</a>
+<div class="card card-pad" style="max-width:760px">
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% include 'core/_form.html' %}
+
+    <hr class="sep" style="margin:22px 0 14px">
+    <h3 style="margin:0 0 4px">Specifications &amp; components</h3>
+    <p class="small muted" style="margin:0 0 12px">
+      Add technical details buyers look for — power, voltage, speed, chuck size, rotation, and so on.
+      Click a preset to add its row, or “+ Custom row” for anything else. These appear on the product page.
+    </p>
+
+    <div id="spec-presets" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      {% for label, ph, icon in common_specs %}
+      <button type="button" class="btn btn-soft btn-sm spec-preset"
+              data-label="{{ label }}" data-ph="{{ ph }}">+ {{ label }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="table-wrap"><table class="tbl" id="spec-rows">
+      <thead><tr><th style="width:38%">Specification</th><th>Value</th><th style="width:44px"></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <button type="button" class="btn btn-soft btn-sm" id="add-spec">+ Custom row</button>
+
+    <div class="form-actions" style="margin-top:20px">
+      <button class="btn btn-primary" data-busy>Save Product</button>
+      <a href="{% url 'product_list' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{{ specs|json_script:"existing-specs" }}
+<script>
+(function(){
+  const tbody = document.querySelector('#spec-rows tbody');
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+  function addRow(label, value, ph){
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" name="spec_label" value="'+esc(label||'')+'" placeholder="e.g. Power"></td>'+
+      '<td><input type="text" name="spec_value" value="'+esc(value||'')+'" placeholder="'+esc(ph||'e.g. 650 W')+'"></td>'+
+      '<td style="text-align:center"><button type="button" class="rm" title="Remove">✕</button></td>';
+    tbody.appendChild(tr);
+    return tr;
+  }
+  // preset buttons
+  document.querySelectorAll('.spec-preset').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const tr = addRow(b.dataset.label, '', b.dataset.ph);
+      tr.querySelector('input[name=spec_value]').focus();
+    });
+  });
+  document.getElementById('add-spec').addEventListener('click',()=>{
+    addRow('', '', '');
+  });
+  tbody.addEventListener('click', e=>{
+    if(e.target.classList.contains('rm')) e.target.closest('tr').remove();
+  });
+  // load existing specs (edit mode)
+  try{
+    const existing = JSON.parse(document.getElementById('existing-specs').textContent || '[]');
+    existing.forEach(s => addRow(s.label, s.value, ''));
+  }catch(e){}
+})();
+</script>
+{% endblock %}

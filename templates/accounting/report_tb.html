@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Trial Balance{% endblock %}
+{% block page_title %}Trial Balance{% endblock %}
+{% block subheading %}<div class="sub">As of {{ end|date:"d M Y" }}</div>{% endblock %}
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:16px">
+  <label class="small muted">As of <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark btn-sm">Apply</button>
+</form>
+<div class="card" style="max-width:720px"><table class="tbl">
+  <thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr><td>{{ r.a.code }} · {{ r.a.name }}</td>
+      <td class="num">{% if r.debit %}{{ sym }}{{ r.debit|floatformat:2|intcomma }}{% endif %}</td>
+      <td class="num">{% if r.credit %}{{ sym }}{{ r.credit|floatformat:2|intcomma }}{% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot><tr><td><b>Total</b></td><td class="num"><b>{{ sym }}{{ td|floatformat:2|intcomma }}</b></td><td class="num"><b>{{ sym }}{{ tc|floatformat:2|intcomma }}</b></td></tr></tfoot>
+</table>
+{% if td == tc %}<p class="small" style="color:#2f9e44;margin-top:10px">✓ In balance</p>{% else %}<p class="small" style="color:#c92a2a;margin-top:10px">Out of balance by {{ sym }}{{ td|floatformat:2 }} vs {{ tc|floatformat:2 }}</p>{% endif %}
+</div>
+{% endblock %}

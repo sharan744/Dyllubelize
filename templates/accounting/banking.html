@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Banking{% endblock %}
+{% block page_title %}Banking{% endblock %}
+{% block content %}
+<div class="grid grid-3" style="margin-bottom:18px">
+  {% for r in rows %}
+  <div class="stat t-teal"><div class="k">{{ r.a.name }}</div><div class="v" style="font-size:1.4rem">{{ sym }}{{ r.bal|floatformat:2|intcomma }}</div>
+    <a href="{% url 'acc_reconcile' %}?account={{ r.a.id }}" class="small" style="color:#fff">Reconcile →</a></div>
+  {% empty %}
+  <p class="muted">No bank accounts. Mark an account as "Bank" in the Chart of Accounts.</p>
+  {% endfor %}
+</div>
+<div class="card"><h3 style="margin-top:0">Recent reconciliations</h3>
+<table class="tbl">
+  <thead><tr><th>Account</th><th>Statement date</th><th class="num">Statement balance</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for r in recons %}
+    <tr><td>{{ r.account.name }}</td><td>{{ r.statement_date|date:"d M Y" }}</td>
+      <td class="num">{{ sym }}{{ r.statement_balance|floatformat:2|intcomma }}</td>
+      <td><span class="chip">{% if r.closed %}Closed{% else %}Open{% endif %}</span></td></tr>
+    {% empty %}
+    <tr><td colspan="4" class="muted small">No reconciliations yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}
