@@ -7,6 +7,7 @@ each product, quantity, unit, price and the order totals.
 - Email backend comes from settings (Gmail SMTP, or console).
 - WhatsApp is handled in templates via click-to-send wa.me links.
 """
+import threading
 from decimal import Decimal
 
 from django.conf import settings
@@ -112,15 +113,30 @@ def _html_body(order, intro, sym, company, sign_html):
 </div>"""
 
 
-def _send(subject, text_body, html_body, recipients):
-    recipients = [r for r in recipients if r]
-    if not recipients or not getattr(settings, "NOTIFY_ENABLED", True):
-        return
+def _deliver(subject, text_body, html_body, recipients):
+    """Actually build and send the message. Runs in a background thread, so a
+    slow or unreachable SMTP host can never block or crash the web request."""
     try:
         msg = EmailMultiAlternatives(subject, text_body,
                                      settings.DEFAULT_FROM_EMAIL, recipients)
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=True)
+    except Exception:
+        pass
+
+
+def _send(subject, text_body, html_body, recipients):
+    recipients = [r for r in recipients if r]
+    if not recipients or not getattr(settings, "NOTIFY_ENABLED", True):
+        return
+    # Fire-and-forget on a daemon thread: the HTTP request returns immediately
+    # and never waits on the mail server (which is unreachable on hosts that
+    # block outbound SMTP). EMAIL_TIMEOUT still caps the background attempt.
+    try:
+        threading.Thread(
+            target=_deliver, args=(subject, text_body, html_body, recipients),
+            daemon=True,
+        ).start()
     except Exception:
         pass
 
