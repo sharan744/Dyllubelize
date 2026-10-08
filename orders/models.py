@@ -139,6 +139,36 @@ class Order(models.Model):
     def total(self):
         return (self.subtotal - self.discount_amount).quantize(Decimal("0.01"))
 
+    # --- Tax (mirrors the invoice: uses the GST settings in Admin & Settings) ---
+    @property
+    def _tax_setting(self):
+        """(rate, label) from SiteSetting; rate is 0 when tax is disabled."""
+        try:
+            from core.models import SiteSetting
+            s = SiteSetting.get()
+            if getattr(s, "tax_enabled", False):
+                return (s.tax_percent or Decimal("0"), s.tax_label or "GST")
+        except Exception:
+            pass
+        return (Decimal("0"), "GST")
+
+    @property
+    def tax_percent_effective(self):
+        return self._tax_setting[0]
+
+    @property
+    def tax_label(self):
+        return self._tax_setting[1]
+
+    @property
+    def tax_amount(self):
+        return (self.total * self.tax_percent_effective / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def total_with_tax(self):
+        """Tax-inclusive total — the amount the customer is actually invoiced."""
+        return (self.total + self.tax_amount).quantize(Decimal("0.01"))
+
     @property
     def total_cost(self):
         return sum((i.line_cost_total for i in self.items.all()), Decimal("0.00"))
@@ -198,6 +228,14 @@ class Order(models.Model):
             self.commit_stock(user)
         elif new_status in (OrderStatus.REJECTED, OrderStatus.CANCELLED):
             self.release_stock(user)
+        # --- Accounts linkage: on delivery, auto-raise the customer invoice
+        # (Dr A/R, Cr Sales/Tax ; Dr COGS, Cr Inventory). Best-effort. ---
+        if new_status in (OrderStatus.DELIVERED, OrderStatus.COMPLETED):
+            try:
+                from accounting import services as _acc
+                _acc.auto_invoice_on_delivery(self, user=user)
+            except Exception:
+                pass
 
     def commit_stock(self, user=None):
         """Take this order's quantities out of stock (once)."""

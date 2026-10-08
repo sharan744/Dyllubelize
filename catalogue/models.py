@@ -180,10 +180,19 @@ class Product(models.Model):
         else:
             self.stock_qty = self.stock_qty + change
         self.save(update_fields=["stock_qty"])
-        return StockMovement.objects.create(
+        mv = StockMovement.objects.create(
             product=self, order=order, kind=kind, change=change,
             balance_after=self.stock_qty, created_by=user, note=note,
         )
+        # Accounts linkage: a damage / write-off reduces the Inventory Asset
+        # and books Inventory Shrinkage. Best-effort — never block the movement.
+        if kind == StockMovement.Kind.DAMAGED and change < 0:
+            try:
+                from accounting import services as _acc
+                _acc.write_off_inventory(self, qty=abs(change), user=user, reference=note)
+            except Exception:
+                pass
+        return mv
 
 
 class ProductSpec(models.Model):

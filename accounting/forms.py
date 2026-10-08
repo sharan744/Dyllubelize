@@ -66,6 +66,10 @@ class BillPaymentForm(forms.ModelForm):
         super().__init__(*a, **k)
         self.fields["pay_from"].queryset = Account.objects.filter(
             is_bank=True, is_active=True)
+        # Amount is computed from the per-bill "Apply" amounts, so it's shown
+        # read-only and isn't required on the form (the view sets it).
+        self.fields["amount"].required = False
+        self.fields["amount"].widget.attrs.update({"readonly": True})
 
 
 class BudgetForm(forms.ModelForm):

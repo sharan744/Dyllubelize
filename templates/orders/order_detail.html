@@ -61,7 +61,12 @@
           <tfoot>
             <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}{{ order.subtotal|floatformat:2|intcomma }}</td></tr>
             {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}{{ order.discount_amount|floatformat:2|intcomma }}</td></tr>{% endif %}
+            {% if site.tax_enabled and site.tax_percent %}
+            <tr><td colspan="5" class="num muted">{{ order.tax_label }} ({{ order.tax_percent_effective|floatformat:1 }}%)</td><td class="num">{{ site.currency_symbol }}{{ order.tax_amount|floatformat:2|intcomma }}</td></tr>
+            <tr><td colspan="5" class="num"><b>Total incl. {{ order.tax_label }}</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}{{ order.total_with_tax|floatformat:2|intcomma }}</b></td></tr>
+            {% else %}
             <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}{{ order.total|floatformat:2|intcomma }}</b></td></tr>
+            {% endif %}
           </tfoot>
         </table>
       </div>

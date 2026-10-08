@@ -25,6 +25,7 @@ CODES = {
     "SALES": "4000",        # Sales income
     "RETURNS": "4900",      # Sales returns & allowances (contra-income)
     "COGS": "5000",         # Cost of goods sold
+    "SHRINK": "5100",       # Inventory shrinkage / write-off & adjustments
     "INVENTORY": "1300",    # Inventory asset
     "BANK": "1010",         # Main bank
     "CASH": "1000",         # Cash on hand
@@ -46,6 +47,7 @@ DEFAULT_CHART = [
     ("4100", "Shipping & Handling Income", AccountType.INCOME, False, None),
     ("4900", "Sales Returns & Allowances", AccountType.INCOME, False, None),
     ("5000", "Cost of Goods Sold", AccountType.EXPENSE, False, None),
+    ("5100", "Inventory Shrinkage & Adjustments", AccountType.EXPENSE, False, None),
     ("6000", "Operating Expenses", AccountType.EXPENSE, False, None),
     ("6100", "Rent", AccountType.EXPENSE, False, "6000"),
     ("6200", "Salaries & Wages", AccountType.EXPENSE, False, "6000"),
@@ -248,3 +250,75 @@ def post_bill_payment(bp, user=None):
     for a in bp.applications.all():
         a.bill.recalc_status()
     return je
+
+
+# ============================================================
+# Inventory ↔ Accounts linkage (QuickBooks-style perpetual inventory)
+#
+#   • Receiving a Purchase Order  → Dr Inventory Asset ; Cr Accounts Payable
+#     (via an auto-created vendor Bill, so it also shows in A/P & Pay Bills)
+#   • Selling (order delivered)   → an invoice is auto-generated:
+#        Dr A/R ; Cr Sales ; Cr Tax   and   Dr COGS ; Cr Inventory Asset
+#   • Damage / write-off          → Dr Inventory Shrinkage ; Cr Inventory Asset
+# ============================================================
+@transaction.atomic
+def bill_from_po(po, user=None, post=True):
+    """On PO receipt, book the stock into Inventory Asset and raise A/P."""
+    ensure_chart()
+    if po.bills.exists():                      # already billed — don't double count
+        return po.bills.first()
+    inv_asset = acc(CODES["INVENTORY"])
+    if not inv_asset:
+        return None
+    bill = Bill.objects.create(
+        supplier=po.supplier, purchase_order=po, number=po.po_no,
+        date=timezone.localdate(), memo=f"Goods received — {po.po_no}",
+        status=DocStatus.DRAFT, created_by=user)
+    for l in po.lines.select_related("product").all():
+        qty = q(l.qty_received or l.qty_ordered)
+        amt = q(qty * q(l.unit_cost))
+        if amt <= 0:
+            continue
+        name = l.product.name if l.product_id else "Item"
+        BillLine.objects.create(
+            bill=bill, account=inv_asset,
+            description=f"{name} × {qty:g} @ {q(l.unit_cost)}", amount=amt)
+    if not bill.lines.exists():
+        bill.delete()
+        return None
+    if post:
+        post_bill(bill, user=user)             # Dr Inventory Asset ; Cr A/P
+    return bill
+
+
+@transaction.atomic
+def write_off_inventory(product, qty, unit_cost=None, user=None, reference=""):
+    """Damage / shrinkage: Dr Inventory Shrinkage ; Cr Inventory Asset."""
+    ensure_chart()
+    cost = q(unit_cost if unit_cost is not None else getattr(product, "cost_price", 0))
+    value = q(abs(Decimal(str(qty or 0))) * cost)
+    if value <= 0:
+        return None
+    shrink = acc(CODES["SHRINK"])
+    inv_asset = acc(CODES["INVENTORY"])
+    if not (shrink and inv_asset):
+        return None
+    lines = [
+        (shrink, value, Z, f"Write-off {product.sku} {reference}".strip(), None, None),
+        (inv_asset, Z, value, f"Write-off {product.sku} {reference}".strip(), None, None),
+    ]
+    return _entry(timezone.localdate(), f"Inventory write-off — {product.sku}",
+                  JournalSource.MANUAL, None, user, lines, reference=reference)
+
+
+def auto_invoice_on_delivery(order, user=None):
+    """When an order is delivered, generate & post its invoice if not already done.
+    Books the sale (A/R, Sales, Tax) and the cost side (COGS, Inventory)."""
+    try:
+        if getattr(order, "invoice", None):
+            return order.invoice
+        if not Account.objects.exists():       # accounting not set up yet — skip
+            return None
+        return invoice_from_order(order, user=user, post=True)
+    except Exception:
+        return None

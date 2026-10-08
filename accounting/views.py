@@ -635,7 +635,8 @@ def ap_aging(request):
 
 @admin_only
 def bill_payment_new(request):
-    sup_id = request.GET.get("supplier")
+    # supplier can arrive via the GET reload (picking a supplier) or the POST form
+    sup_id = request.GET.get("supplier") or request.POST.get("supplier")
     # keep the picked supplier selected after the reload that loads open bills
     initial = {"supplier": sup_id} if sup_id else {}
     if not request.POST:
@@ -648,21 +649,39 @@ def bill_payment_new(request):
         open_bills = [b for b in Bill.objects.filter(supplier_id=sup_id).exclude(
             status__in=[DocStatus.DRAFT, DocStatus.VOID]) if b.balance > 0]
     if request.method == "POST" and form.is_valid():
-        bp = form.save(commit=False)
-        bp.created_by = request.user
-        bp.save()
+        # The per-bill "Apply" amounts are the single source of truth: the payment
+        # total is the sum of what's actually applied, and nothing can be applied
+        # beyond what a bill still owes. This keeps the bill sub-ledger and the A/P
+        # general-ledger balance in agreement (a partial payment leaves a balance).
+        cent = Decimal("0.01")
         bill_ids = request.POST.getlist("apply_bill")
         amounts = request.POST.getlist("apply_amount")
+        applications, total_applied = [], Z
         for i, bid in enumerate(bill_ids):
             try:
                 amt = Decimal(amounts[i] or "0")
             except (InvalidOperation, IndexError):
                 amt = Z
-            if amt > 0:
-                BillPaymentApplication.objects.create(payment=bp, bill_id=bid, amount=q(amt))
-        services.post_bill_payment(bp, user=request.user)
-        messages.success(request, f"Payment {bp.number} to {bp.supplier} recorded.")
-        return redirect("acc_bill_list")
+            bill = Bill.objects.filter(pk=bid, supplier_id=sup_id).first()
+            if not bill or amt <= 0:
+                continue
+            amt = min(amt.quantize(cent), bill.balance)   # never overpay a bill
+            if amt <= 0:
+                continue
+            applications.append((bill, amt))
+            total_applied += amt
+        if total_applied <= 0:
+            messages.error(request, "Enter an amount to apply to at least one open bill.")
+        else:
+            bp = form.save(commit=False)
+            bp.created_by = request.user
+            bp.amount = total_applied                      # pay exactly what was applied
+            bp.save()
+            for bill, amt in applications:
+                BillPaymentApplication.objects.create(payment=bp, bill=bill, amount=amt)
+            services.post_bill_payment(bp, user=request.user)
+            messages.success(request, f"Payment {bp.number} to {bp.supplier} recorded.")
+            return redirect("acc_bill_list")
     return render(request, "accounting/bill_payment_form.html", {
         "form": form, "open_bills": open_bills, "suppliers": Supplier.objects.all(),
         "sym": _sym()})

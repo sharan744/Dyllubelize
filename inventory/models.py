@@ -111,6 +111,14 @@ class PurchaseOrder(models.Model):
         self.received_at = timezone.now()
         self.received_by = user
         self.save(update_fields=["status", "received_at", "received_by"])
+        # Link into the accounts (QuickBooks-style): book the received stock as
+        # Inventory Asset and raise Accounts Payable to the supplier. Best-effort
+        # — a problem here must never block goods receipt.
+        try:
+            from accounting import services as _acc
+            _acc.bill_from_po(self, user=user)
+        except Exception:
+            pass
 
 
 class PurchaseOrderLine(models.Model):
