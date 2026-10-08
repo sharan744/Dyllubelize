@@ -41,6 +41,26 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 .sign .sp { height: 46px; }
 .doc-note { font-size: .74rem; color: var(--sf); text-align: center; margin-top: 26px; border-top: 1px solid var(--ln); padding-top: 12px; }
 
+/* QuickBooks-style inline editable cells */
+table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on one line */
+.qb-cell { width: 78px; text-align: right; font: inherit; color: var(--dk);
+  border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; background: transparent;
+  font-variant-numeric: tabular-nums; cursor: text; vertical-align: middle; }
+.qb-cell.qb-qty { width: 52px; }
+.qb-sym { color: var(--sf); vertical-align: middle; margin-right: 1px; }
+.qb-cell:hover { border-color: var(--ln); background: #fffdf8; }
+.qb-cell:focus { outline: none; border-color: var(--ac); background: #fff; box-shadow: 0 0 0 2px rgba(224,96,58,.15); }
+.qb-cell.saved { border-color: #0F8B86; background: #eefaf8; }
+.qb-cell.err { border-color: #c0392b; background: #fdecea; }
+.qb-hint { max-width: 820px; margin: 12px auto 0; font-size: .78rem; color: var(--sf);
+  background: #fff7f0; border: 1px solid #f0d8c8; border-radius: 8px; padding: 9px 13px; }
+.qb-hint b { color: var(--dk); }
+.qb-flash { position: fixed; bottom: 18px; right: 18px; background: var(--dk); color: #fff;
+  padding: 9px 15px; border-radius: 8px; font-size: .82rem; opacity: 0; transition: opacity .18s;
+  pointer-events: none; z-index: 80; }
+.qb-flash.show { opacity: 1; }
+.qb-flash.bad { background: #c0392b; }
+
 @media print {
   body { background: #fff !important; }
   .rail, .topbar, .doc-toolbar, .flashes, .menu-btn, .rail-scrim { display: none !important; }
@@ -49,6 +69,10 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   .content { padding: 0 !important; max-width: none !important; }
   .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 0; }
   @page { size: A4; margin: 14mm; }
+  /* editable cells print as plain numbers */
+  .qb-cell { border: none !important; background: none !important; box-shadow: none !important;
+    padding: 0 !important; width: auto !important; -webkit-appearance: none; appearance: none; }
+  .qb-hint, .qb-flash { display: none !important; }
 }
 </style>
 {% endblock %}
@@ -62,6 +86,12 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   <a href="{% url 'order_detail' order.pk %}" class="btn btn-ghost btn-sm">Back</a>
   <button onclick="window.print()" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='print' %} Print / Save as PDF</button>
 </div>
+{% if can_edit %}
+<div class="qb-hint">
+  <b>Editing on:</b> click any <b>Unit Price</b> or <b>Qty</b> and type a number — or a calculation like
+  <b>12*4</b>, <b>100/2</b>, <b>50+5*3</b>. Press Enter (or click away) and it saves automatically.
+</div>
+{% endif %}
 
 <div class="doc-page">
   <!-- Header -->
@@ -116,10 +146,10 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
         <td>{{ i.product_name }}{% if i.note %}<br><span style="color:#6b6577;font-size:.85em">{{ i.note }}</span>{% endif %}</td>
         <td>{{ i.sku }}</td>
         <td>{{ i.unit }}</td>
-        <td class="num">{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}</td>
-        <td class="num">{{ i.quantity|floatformat:0 }}</td>
+        <td class="num">{% if can_edit %}<span class="qb-sym">{{ site.currency_symbol }}</span><input class="qb-cell" data-line-id="{{ i.pk }}" data-field="price" value="{{ i.unit_price|floatformat:2 }}" inputmode="decimal">{% else %}{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}{% endif %}</td>
+        <td class="num">{% if can_edit %}<input class="qb-cell qb-qty" data-line-id="{{ i.pk }}" data-field="qty" value="{{ i.quantity|floatformat:0 }}" inputmode="decimal">{% else %}{{ i.quantity|floatformat:0 }}{% endif %}</td>
         <td class="num">{% if i.line_discount_percent %}{{ i.line_discount_percent|floatformat:0 }}%{% else %}—{% endif %}</td>
-        <td class="num">{{ site.currency_symbol }}{{ i.line_total|floatformat:2|intcomma }}</td>
+        <td class="num"><span class="qb-sym">{{ site.currency_symbol }}</span><span class="qb-amt" id="qb-amt-{{ i.pk }}">{{ i.line_total|floatformat:2|intcomma }}</span></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -127,18 +157,18 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 
   <!-- Totals -->
   <table class="totals">
-    <tr><td>Subtotal</td><td class="num">{{ site.currency_symbol }}{{ order.subtotal|floatformat:2|intcomma }}</td></tr>
+    <tr><td>Subtotal</td><td class="num">{{ site.currency_symbol }}<span id="qb-subtotal">{{ order.subtotal|floatformat:2|intcomma }}</span></td></tr>
     {% if order.discount_percent %}
     <tr><td>Discount ({{ order.discount_percent|floatformat:0 }}%)</td>
-        <td class="num">−{{ site.currency_symbol }}{{ order.discount_amount|floatformat:2|intcomma }}</td></tr>
-    <tr><td>Net</td><td class="num">{{ site.currency_symbol }}{{ net|floatformat:2|intcomma }}</td></tr>
+        <td class="num">−{{ site.currency_symbol }}<span id="qb-discount">{{ order.discount_amount|floatformat:2|intcomma }}</span></td></tr>
+    <tr><td>Net</td><td class="num">{{ site.currency_symbol }}<span id="qb-net">{{ net|floatformat:2|intcomma }}</span></td></tr>
     {% endif %}
     {% if site.tax_enabled and site.tax_percent %}
     <tr><td>{{ site.tax_label }} ({{ site.tax_percent|floatformat:0 }}%)</td>
-        <td class="num">{{ site.currency_symbol }}{{ tax_amount|floatformat:2|intcomma }}</td></tr>
+        <td class="num">{{ site.currency_symbol }}<span id="qb-tax">{{ tax_amount|floatformat:2|intcomma }}</span></td></tr>
     {% endif %}
     <tr class="grand"><td>Total ({{ site.currency_code }})</td>
-        <td class="num">{{ site.currency_symbol }}{{ grand_total|floatformat:2|intcomma }}</td></tr>
+        <td class="num">{{ site.currency_symbol }}<span id="qb-grand">{{ grand_total|floatformat:2|intcomma }}</span></td></tr>
   </table>
 
   {% if order.remarks %}
@@ -165,4 +195,82 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
     This quotation is valid until {{ valid_until|date:"d M Y" }} · {{ site.company_name }}.
   </div>
 </div>
+
+{% if can_edit %}
+<div class="qb-flash" id="qb-flash"></div>
+<script>
+(function(){
+  const URL   = "{% url 'order_line_update' order.pk %}";
+  const CSRF  = "{{ csrf_token }}";
+  const flash = document.getElementById('qb-flash');
+  let flashTimer;
+
+  function showFlash(msg, bad){
+    flash.textContent = msg;
+    flash.classList.toggle('bad', !!bad);
+    flash.classList.add('show');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(()=>flash.classList.remove('show'), 1600);
+  }
+  // instant client-side preview of a calculation (server is still authoritative)
+  function preview(expr){
+    const s = String(expr).trim().replace(/^=/, '');
+    if(!/^[0-9+\-*/().\s]+$/.test(s) || s === '') return null;
+    try { const v = Function('"use strict";return ('+s+')')(); return isFinite(v) ? v : null; }
+    catch(e){ return null; }
+  }
+
+  document.querySelectorAll('.qb-cell').forEach(cell=>{
+    cell.dataset.last = cell.value;                 // remember the committed value
+    cell.addEventListener('focus', ()=> cell.select());
+    cell.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){ e.preventDefault(); cell.blur(); }
+      if(e.key === 'Escape'){ cell.value = cell.dataset.last; cell.blur(); }
+    });
+    cell.addEventListener('blur', ()=> commit(cell));
+  });
+
+  function commit(cell){
+    const raw = cell.value.trim();
+    if(raw === '' || raw === cell.dataset.last){ cell.value = cell.dataset.last; return; }
+
+    const body = new URLSearchParams({
+      line_id: cell.dataset.lineId, field: cell.dataset.field, value: raw
+    });
+    fetch(URL, {
+      method:'POST',
+      headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+      body: body.toString()
+    })
+    .then(r=> r.json().then(d=>({ok:r.ok, d})))
+    .then(({ok,d})=>{
+      if(!ok || !d.ok){ throw new Error(d.error || 'Could not save.'); }
+      // write back the server-computed, saved values
+      cell.value = (cell.dataset.field === 'qty') ? d.qty : d.unit_price;
+      cell.dataset.last = cell.value;
+      const amt = document.getElementById('qb-amt-'+cell.dataset.lineId);
+      if(amt) amt.textContent = withCommas(d.line_total);
+      setTxt('qb-subtotal', d.subtotal); setTxt('qb-discount', d.discount);
+      setTxt('qb-net', d.net); setTxt('qb-tax', d.tax); setTxt('qb-grand', d.grand_total);
+      cell.classList.remove('err'); cell.classList.add('saved');
+      setTimeout(()=>cell.classList.remove('saved'), 900);
+      showFlash('Saved');
+    })
+    .catch(err=>{
+      cell.value = cell.dataset.last;               // revert on failure
+      cell.classList.add('err');
+      setTimeout(()=>cell.classList.remove('err'), 1400);
+      showFlash(err.message || 'Could not save.', true);
+    });
+  }
+
+  function setTxt(id, val){ const el=document.getElementById(id); if(el) el.textContent = withCommas(val); }
+  function withCommas(n){
+    const parts = String(n).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

@@ -285,12 +285,104 @@ def order_quotation(request, pk):
     grand_total = net + tax_amount
     valid_until = timezone.localdate() + timedelta(days=site.quote_validity_days or 15)
 
+    # Inline price/qty editing is allowed for the owning salesperson or an admin,
+    # and only while the order is still open (not completed/rejected/cancelled).
+    can_edit = order.is_open and (
+        request.user.is_admin_role or order.salesperson_id == request.user.id)
+
     return render(request, "orders/quotation.html", {
         "order": order,
         "net": net,
         "tax_amount": tax_amount,
         "grand_total": grand_total,
         "valid_until": valid_until,
+        "can_edit": can_edit,
+    })
+
+
+# ---- QuickBooks-style inline line editing (with calculator expressions) ----
+import ast as _ast
+import operator as _operator
+
+_CALC_OPS = {
+    _ast.Add: _operator.add, _ast.Sub: _operator.sub,
+    _ast.Mult: _operator.mul, _ast.Div: _operator.truediv,
+    _ast.USub: _operator.neg, _ast.UAdd: _operator.pos,
+}
+
+
+def _safe_calc(expr):
+    """Evaluate a plain arithmetic expression like '12*4', '100/2+5', '(3+1)*20'.
+    Only numbers and + - * / ( ) are allowed — no names, calls or attributes."""
+    expr = (expr or "").strip().lstrip("=")          # allow a leading '=' like Excel/QB
+    if not expr:
+        raise ValueError("empty")
+    node = _ast.parse(expr, mode="eval").body
+
+    def ev(n):
+        if isinstance(n, _ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, _ast.BinOp) and type(n.op) in _CALC_OPS:
+            return _CALC_OPS[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, _ast.UnaryOp) and type(n.op) in _CALC_OPS:
+            return _CALC_OPS[type(n.op)](ev(n.operand))
+        raise ValueError("unsupported expression")
+
+    return ev(node)
+
+
+@role_required(*ALL_STAFF)
+def order_line_update(request, pk):
+    """AJAX: update one order line's quantity or unit price. The posted value may
+    be a number or a calculation (evaluated safely server-side). Returns the
+    recomputed line total and order totals."""
+    from core.models import SiteSetting
+    order = get_object_or_404(Order, pk=pk)
+    if order.salesperson_id != request.user.id and not request.user.is_admin_role:
+        return JsonResponse({"ok": False, "error": "You can't edit this order."}, status=403)
+    if not order.is_open:
+        return JsonResponse({"ok": False, "error": "This order can no longer be edited."}, status=400)
+
+    field = request.POST.get("field")
+    it = order.items.filter(pk=request.POST.get("line_id")).first()
+    if not it or field not in ("qty", "price"):
+        return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
+
+    try:
+        raw = _safe_calc(request.POST.get("value", ""))
+        val = Decimal(str(raw)).quantize(Decimal("0.01"))
+    except ZeroDivisionError:
+        return JsonResponse({"ok": False, "error": "Can't divide by zero."}, status=400)
+    except Exception:
+        return JsonResponse({"ok": False, "error": "Enter a number or a calc like 12*4."}, status=400)
+    if val < 0:
+        return JsonResponse({"ok": False, "error": "Value can't be negative."}, status=400)
+
+    if field == "qty":
+        it.quantity = val
+        it.save(update_fields=["quantity"])
+    else:
+        it.unit_price = val
+        it.save(update_fields=["unit_price"])
+
+    site = SiteSetting.get()
+    net = order.total
+    if site.tax_enabled and site.tax_percent:
+        tax = (net * site.tax_percent / Decimal("100")).quantize(Decimal("0.01"))
+    else:
+        tax = Decimal("0.00")
+    qd = it.quantity
+    qty_disp = f"{qd:.0f}" if qd == qd.to_integral_value() else f"{qd:.2f}"
+    return JsonResponse({
+        "ok": True,
+        "qty": qty_disp,
+        "unit_price": f"{it.unit_price:.2f}",
+        "line_total": f"{it.line_total:.2f}",
+        "subtotal": f"{order.subtotal:.2f}",
+        "discount": f"{order.discount_amount:.2f}",
+        "net": f"{net:.2f}",
+        "tax": f"{tax:.2f}",
+        "grand_total": f"{(net + tax):.2f}",
     })
 
 

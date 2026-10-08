@@ -16,6 +16,7 @@ urlpatterns = [
     path("<int:pk>/", views.order_detail, name="order_detail"),
     path("<int:pk>/edit/", views.order_edit, name="order_edit"),
     path("<int:pk>/quotation/", views.order_quotation, name="order_quotation"),
+    path("<int:pk>/line-update/", views.order_line_update, name="order_line_update"),
     path("<int:pk>/cancel/", views.order_cancel, name="order_cancel"),
 
     # Team lead
