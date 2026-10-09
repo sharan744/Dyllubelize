@@ -23,6 +23,11 @@ urlpatterns = [
     path("orders/<int:pk>/", views.order_detail, name="api_order_detail"),
     path("orders/<int:pk>/action/", views.order_action, name="api_order_action"),
 
+    # order documents (invoice + dispatch note) and incentives
+    path("orders/<int:pk>/invoice/", views2.order_invoice, name="api_order_invoice"),
+    path("orders/<int:pk>/dispatch/", views2.order_dispatch, name="api_order_dispatch"),
+    path("incentives/", views2.incentives, name="api_incentives"),
+
     # suppliers
     path("suppliers/", views2.suppliers, name="api_suppliers"),
 

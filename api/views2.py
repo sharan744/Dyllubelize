@@ -403,3 +403,88 @@ def balance_sheet(request):
         "liabilities": groups["liability"], "liabilities_total": float(totals["liability"]),
         "equity": groups["equity"], "equity_total": float(totals["equity"]),
     })
+
+
+# ======================================================= order documents
+@api_view(["GET"])
+def order_invoice(request, pk):
+    """The customer invoice generated for this order (created on delivery)."""
+    from orders.models import Order
+    from .serializers2 import InvoiceDetailSerializer
+    order = get_object_or_404(Order, pk=pk)
+    inv = getattr(order, "invoice", None)
+    if not inv:
+        return Response({"detail": "No invoice yet. An invoice is generated when the order is delivered."},
+                        status=http.HTTP_404_NOT_FOUND)
+    return Response(InvoiceDetailSerializer(inv).data)
+
+
+@api_view(["GET"])
+def order_dispatch(request, pk):
+    """The dispatch note(s) covering this order (the dispatch/delivery document)."""
+    from orders.models import Order
+    from .serializers2 import DispatchSerializer
+    order = get_object_or_404(Order, pk=pk)
+    qs = order.dispatches.all() if hasattr(order, "dispatches") else []
+    return Response(DispatchSerializer(qs, many=True).data)
+
+
+# ======================================================= incentives
+@api_view(["GET"])
+def incentives(request):
+    """Salesperson incentives: sales, margin and incentive (% of margin) on
+    delivered/completed orders. Admin only. Optional ?start=YYYY-MM-DD&end=YYYY-MM-DD."""
+    if not request.user.is_admin_role:
+        return Response({"detail": "Admins only."}, status=http.HTTP_403_FORBIDDEN)
+    from orders.models import Order, OrderStatus
+    from core.models import SiteSetting
+    import datetime as _dt
+
+    def _parse(name, fallback):
+        v = request.GET.get(name)
+        if not v:
+            return fallback
+        try:
+            return _dt.date.fromisoformat(v)
+        except ValueError:
+            return fallback
+
+    today = timezone.localdate()
+    start = _parse("start", today.replace(day=1))
+    end = _parse("end", today)
+    default_rate = SiteSetting.get().incentive_percent
+
+    orders = (Order.objects
+              .filter(status__in=[OrderStatus.DELIVERED, OrderStatus.COMPLETED])
+              .select_related("salesperson").prefetch_related("items"))
+
+    data = {}
+    for o in orders:
+        d = o.completed_at or o.confirmed_at or o.created_at
+        if not (start <= timezone.localtime(d).date() <= end):
+            continue
+        sp = o.salesperson
+        key = sp.id if sp else 0
+        rate = (sp.incentive_percent if sp and sp.incentive_percent is not None else default_rate)
+        row = data.setdefault(key, {"name": sp.display_name if sp else "—",
+                                    "rate": float(rate), "orders": 0,
+                                    "sales": Z, "margin": Z})
+        row["orders"] += 1
+        row["sales"] += o.total
+        row["margin"] += o.margin
+
+    rows = []
+    tot_sales = tot_margin = tot_inc = Z
+    for r in data.values():
+        inc = (r["margin"] * Decimal(str(r["rate"])) / Decimal("100")).quantize(Decimal("0.01"))
+        tot_sales += r["sales"]; tot_margin += r["margin"]; tot_inc += inc
+        rows.append({"name": r["name"], "rate": r["rate"], "orders": r["orders"],
+                     "sales": float(r["sales"]), "margin": float(r["margin"]),
+                     "incentive": float(inc)})
+    rows.sort(key=lambda x: x["incentive"], reverse=True)
+    return Response({
+        "start": start.isoformat(), "end": end.isoformat(),
+        "default_rate": float(default_rate), "rows": rows,
+        "total_sales": float(tot_sales), "total_margin": float(tot_margin),
+        "total_incentive": float(tot_inc),
+    })
