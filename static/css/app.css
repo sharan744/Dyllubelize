@@ -367,7 +367,7 @@ textarea { resize: vertical; }
   width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: .9rem; }
 .pk-modal-x:hover { background: #e7e0d2; }
 .pk-modal-head { display: flex; gap: 18px; align-items: flex-start; }
-.pk-modal-img { width: 150px; height: 150px; flex: 0 0 150px; border-radius: 12px; overflow: hidden;
+.pk-modal-img { width: 220px; height: 220px; flex: 0 0 220px; border-radius: 12px; overflow: hidden;
   background: #fff; border: 1px solid var(--line); display: grid; place-items: center; }
 .pk-modal-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .pk-modal-price { font-weight: 800; color: var(--accent-ink); font-size: 1.3rem; margin-top: 8px; }
@@ -479,4 +479,7 @@ hr.sep { border: none; border-top: 1px solid var(--line-2); margin: 20px 0; }
   width: 40px; height: 40px; place-items: center; cursor: pointer; }
 @media (max-width: 520px) {
   .grid-4, .grid-2 { grid-template-columns: 1fr; }
+  /* Stack the info-modal header on phones and let the (now larger) image size down */
+  .pk-modal-head { flex-direction: column; align-items: center; text-align: center; }
+  .pk-modal-img { width: 180px; height: 180px; flex: 0 0 180px; }
 }
