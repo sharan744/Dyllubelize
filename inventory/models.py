@@ -149,10 +149,17 @@ class PurchaseOrder(models.Model):
                         qty, StockMovement.Kind.RESTOCK, user=user,
                         note=f"{self.po_no} — goods received",
                     )
-                # keep cost price fresh from the last purchase
+                # Update the catalogue from this PO: landed cost always, and the
+                # selling price when one was entered on the PO line.
+                fields = []
                 if line.unit_cost:
                     line.product.cost_price = line.unit_cost
-                    line.product.save(update_fields=["cost_price"])
+                    fields.append("cost_price")
+                if getattr(line, "sell_price", 0) and line.sell_price > 0:
+                    line.product.selling_price = line.sell_price
+                    fields.append("selling_price")
+                if fields:
+                    line.product.save(update_fields=fields)
         self.status = self.Status.RECEIVED
         self.received_at = timezone.now()
         self.received_by = user
