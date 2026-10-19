@@ -85,6 +85,16 @@ class SiteSetting(models.Model):
                 "Delivery times are estimated and confirmed on order acceptance.",
     )
 
+    # Invoice extras (shown on the printed invoice / PDF)
+    bank_details = models.TextField(
+        "Bank / payment details", blank=True, default="",
+        help_text="Bank account(s) for payment — shown in the invoice footer.",
+    )
+    invoice_notes = models.TextField(
+        "Invoice footer note", blank=True, default="",
+        help_text="A closing message shown at the bottom of every invoice.",
+    )
+
     class Meta:
         verbose_name = "Site Setting"
         verbose_name_plural = "Site Settings"

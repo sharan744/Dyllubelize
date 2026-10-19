@@ -20,6 +20,8 @@ class SiteSettingAdmin(admin.ModelAdmin):
         }),
         ("Tax / VAT", {"fields": ("tax_enabled", "tax_label", "tax_percent")}),
         ("Quotation", {"fields": ("quote_validity_days", "quote_terms")}),
+        ("Invoice", {"fields": ("bank_details", "invoice_notes"),
+                     "description": "Bank details and closing note shown on invoices."}),
     )
 
     readonly_fields = ("currency_symbol",)

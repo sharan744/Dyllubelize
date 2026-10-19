@@ -87,8 +87,8 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
       <table>
         <tr><td>Date:</td><td><b>{{ inv_date|date:"d M Y" }}</b></td></tr>
         <tr><td>Due:</td><td><b>{{ due_date|date:"d M Y" }}</b></td></tr>
+        <tr><td>Terms:</td><td><b>{{ terms_label }}</b></td></tr>
         <tr><td>Order:</td><td><b>{{ order.order_no }}</b></td></tr>
-        <tr><td>Salesperson:</td><td><b>{{ order.salesperson.display_name|default:"—" }}</b></td></tr>
       </table>
       <span class="inv-status {{ inv_status_code }}">{{ inv_status }}</span>
     </div>
@@ -109,6 +109,21 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
       <p>{{ order.customer.billing_address|default:order.customer.delivery_address|default:"—"|linebreaksbr }}</p>
     </div>
   </div>
+
+  <!-- Sign-offs -->
+  <table style="width:100%;margin-bottom:18px;border-collapse:collapse">
+    <tr>
+      <td style="width:33%;border:1px solid var(--ln);padding:8px 12px">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ac);font-weight:700">Checked by</div>
+        <div style="min-height:18px">{{ checked_by }}</div></td>
+      <td style="width:34%;border:1px solid var(--ln);padding:8px 12px">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ac);font-weight:700">Invoiced by</div>
+        <div style="min-height:18px">{{ invoiced_by }}</div></td>
+      <td style="width:33%;border:1px solid var(--ln);padding:8px 12px">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ac);font-weight:700">Packed by</div>
+        <div style="min-height:18px">{{ packed_by }}</div></td>
+    </tr>
+  </table>
 
   <!-- Line items -->
   <table class="doc-tbl">
@@ -156,6 +171,19 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   <div class="doc-box" style="margin-top:20px">
     <h4>Remarks</h4>
     <p>{{ order.remarks|linebreaksbr }}</p>
+  </div>
+  {% endif %}
+
+  {% if site.bank_details %}
+  <div class="doc-box" style="margin-top:20px">
+    <h4>Payment can be made to</h4>
+    <p>{{ site.bank_details|linebreaksbr }}</p>
+  </div>
+  {% endif %}
+
+  {% if site.invoice_notes %}
+  <div class="doc-box" style="margin-top:12px">
+    <p>{{ site.invoice_notes|linebreaksbr }}</p>
   </div>
   {% endif %}
 

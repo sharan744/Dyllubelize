@@ -340,6 +340,18 @@ def _invoice_context(order):
         status = "Proforma" if order.is_open else "Issued"
         status_code = "open"
 
+    # Terms (e.g. "Net 30") — from the gap between invoice date and due date.
+    try:
+        terms_days = (due_date - inv_date).days if (due_date and inv_date) else 30
+    except Exception:
+        terms_days = 30
+    terms_label = f"Net {terms_days}" if terms_days else "Due on receipt"
+
+    # Sign-offs, from the order's own people (blank where unknown).
+    invoiced_by = order.salesperson.display_name if order.salesperson else ""
+    checked_by = order.confirmed_by.display_name if getattr(order, "confirmed_by", None) else ""
+    packed_by = ""  # filled in by hand on the printed copy
+
     return {
         "order": order, "site": site,
         "net": net, "tax_amount": tax_amount, "grand_total": grand_total,
@@ -347,6 +359,8 @@ def _invoice_context(order):
         "amount_paid": amount_paid, "balance": balance,
         "inv_status": status, "inv_status_code": status_code,
         "has_invoice": inv is not None,
+        "terms_label": terms_label,
+        "invoiced_by": invoiced_by, "checked_by": checked_by, "packed_by": packed_by,
     }
 
 
@@ -448,8 +462,8 @@ def _render_invoice_pdf(ctx):
         [Paragraph(
             f"Date: <b>{ctx['inv_date']:%d %b %Y}</b><br/>"
             f"Due: <b>{ctx['due_date']:%d %b %Y}</b><br/>"
-            f"Order: <b>{order.order_no}</b><br/>"
-            f"Salesperson: <b>{(order.salesperson.display_name if order.salesperson else '-')}</b>",
+            f"Terms: <b>{ctx['terms_label']}</b><br/>"
+            f"Order: <b>{order.order_no}</b>",
             metaR)],
     ], colWidths=[70 * mm])
     meta_tbl.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
@@ -488,7 +502,23 @@ def _render_invoice_pdf(ctx):
         ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
-    story += [bt, Spacer(1, 12)]
+    story += [bt, Spacer(1, 10)]
+
+    # ---- Sign-offs: Checked / Invoiced / Packed by ----
+    so_lbl = ParagraphStyle("solbl", parent=lbl, fontSize=7)
+    def signoff(title, name):
+        return [Paragraph(title, so_lbl), Spacer(1, 2), Paragraph(name or " ", body)]
+    signoffs = Table([[signoff("CHECKED BY", ctx.get("checked_by")),
+                       signoff("INVOICED BY", ctx.get("invoiced_by")),
+                       signoff("PACKED BY", ctx.get("packed_by"))]],
+                     colWidths=[56 * mm, 56 * mm, 56 * mm])
+    signoffs.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOX", (0, 0), (-1, -1), 0.6, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.6, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story += [signoffs, Spacer(1, 12)]
 
     # ---- Line items ----
     rows = [[Paragraph("<b>Product</b>", cellL), Paragraph("<b>SKU</b>", cellL),
@@ -539,6 +569,14 @@ def _render_invoice_pdf(ctx):
 
     if order.remarks:
         story += [Paragraph("REMARKS", lbl), Paragraph(order.remarks.replace("\n", "<br/>"), body), Spacer(1, 10)]
+
+    bank = getattr(site, "bank_details", "") or ""
+    if bank.strip():
+        story += [Paragraph("PAYMENT CAN BE MADE TO", lbl),
+                  Paragraph(bank.replace("\n", "<br/>"), body), Spacer(1, 8)]
+    inotes = getattr(site, "invoice_notes", "") or ""
+    if inotes.strip():
+        story += [Paragraph(inotes.replace("\n", "<br/>"), body), Spacer(1, 8)]
 
     note = ("Prices are before " + (site.tax_label or "tax") + "; the total includes " + (site.tax_label or "tax") + "."
             if (site.tax_enabled and site.tax_percent) else "Prices are exclusive of tax.")
