@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Profit &amp; Margin{% endblock %}
+{% block page_title %}Profit &amp; Margin{% endblock %}
+{% block subheading %}<div class="sub">What it cost vs what we sold it for · {{ start|date:"d M Y" }} – {{ end|date:"d M Y" }} · delivered &amp; completed sales, pre-tax</div>{% endblock %}
+
+{% block content %}
+<form method="get" class="toolbar" style="margin-bottom:18px">
+  <label class="small muted">From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label class="small muted">To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-dark">Apply</button>
+</form>
+
+<!-- Headline KPIs -->
+<div class="grid grid-4" style="margin-bottom:14px">
+  <div class="stat t-teal">
+    <div class="k">Revenue (sold)</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ d.revenue|floatformat:2|intcomma }}</div>
+    <div class="foot">What customers paid</div>
+  </div>
+  <div class="stat t-amber">
+    <div class="k">Cost (purchase)</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ d.cost|floatformat:2|intcomma }}</div>
+    <div class="foot">What we paid suppliers</div>
+  </div>
+  <div class="stat {% if d.profit >= 0 %}t-green{% else %}t-amber{% endif %}">
+    <div class="k">Gross profit</div>
+    <div class="v" style="font-size:1.6rem">{{ site.currency_symbol }}{{ d.profit|floatformat:2|intcomma }}</div>
+    <div class="foot">Revenue − cost</div>
+  </div>
+  <div class="stat t-ink">
+    <div class="k">Gross margin</div>
+    <div class="v" style="font-size:1.6rem">{{ d.margin|floatformat:1 }}%</div>
+    <div class="foot">Markup {{ d.markup|floatformat:1 }}%</div>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:22px">
+  <div class="stat"><div class="k">Orders</div><div class="v" style="font-size:1.4rem">{{ d.order_count }}</div></div>
+  <div class="stat"><div class="k">Units sold</div><div class="v" style="font-size:1.4rem">{{ d.units|floatformat:0|intcomma }}</div></div>
+  <div class="stat"><div class="k">Avg profit / order</div><div class="v" style="font-size:1.4rem">{{ site.currency_symbol }}{{ d.avg_profit|floatformat:2|intcomma }}</div></div>
+  <div class="stat"><div class="k">Products sold</div><div class="v" style="font-size:1.4rem">{{ d.products|length }}</div></div>
+</div>
+
+<!-- By product: cost vs sell -->
+<div class="card" style="margin-bottom:18px">
+  <div class="card-head"><h3>Margin by product</h3><div class="spacer"></div>
+    <a href="{% url 'margin_export' 'product' %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}" class="btn btn-soft btn-sm">Export CSV</a></div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Product</th><th class="num">Qty</th>
+      <th class="num">Avg cost</th><th class="num">Avg sell</th>
+      <th class="num">Revenue</th><th class="num">Cost</th>
+      <th class="num">Profit</th><th class="num">Margin</th>
+    </tr></thead>
+    <tbody>
+      {% for r in d.products %}
+      <tr>
+        <td><b>{{ r.name }}</b><div class="mono small muted">{{ r.sku }}</div></td>
+        <td class="num">{{ r.qty|floatformat:0 }}</td>
+        <td class="num muted">{{ site.currency_symbol }}{{ r.avg_cost|floatformat:2 }}</td>
+        <td class="num">{{ site.currency_symbol }}{{ r.avg_sell|floatformat:2 }}</td>
+        <td class="num">{{ site.currency_symbol }}{{ r.revenue|floatformat:2|intcomma }}</td>
+        <td class="num muted">{{ site.currency_symbol }}{{ r.cost|floatformat:2|intcomma }}</td>
+        <td class="num"><b style="color:{% if r.profit >= 0 %}var(--ok){% else %}var(--danger,#c0392b){% endif %}">{{ site.currency_symbol }}{{ r.profit|floatformat:2|intcomma }}</b></td>
+        <td class="num"><span class="chip">{{ r.margin|floatformat:1 }}%</span></td>
+      </tr>
+      {% empty %}<tr><td colspan="8"><div class="empty"><p>No sales in this range.</p></div></td></tr>{% endfor %}
+    </tbody>
+    {% if d.products %}
+    <tfoot><tr>
+      <td><b>Total</b></td><td class="num">{{ d.units|floatformat:0 }}</td><td></td><td></td>
+      <td class="num"><b>{{ site.currency_symbol }}{{ d.revenue|floatformat:2|intcomma }}</b></td>
+      <td class="num"><b>{{ site.currency_symbol }}{{ d.cost|floatformat:2|intcomma }}</b></td>
+      <td class="num"><b>{{ site.currency_symbol }}{{ d.profit|floatformat:2|intcomma }}</b></td>
+      <td class="num"><b>{{ d.margin|floatformat:1 }}%</b></td>
+    </tr></tfoot>
+    {% endif %}
+  </table></div>
+</div>
+
+<!-- By salesperson -->
+<div class="card" style="margin-bottom:18px">
+  <div class="card-head"><h3>Margin by salesperson</h3><div class="spacer"></div>
+    <a href="{% url 'margin_export' 'salesperson' %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}" class="btn btn-soft btn-sm">Export CSV</a></div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Salesperson</th><th class="num">Orders</th>
+      <th class="num">Revenue</th><th class="num">Cost</th>
+      <th class="num">Profit</th><th class="num">Margin</th>
+    </tr></thead>
+    <tbody>
+      {% for r in d.salespeople %}
+      <tr>
+        <td><b>{{ r.name }}</b></td>
+        <td class="num">{{ r.orders }}</td>
+        <td class="num">{{ site.currency_symbol }}{{ r.revenue|floatformat:2|intcomma }}</td>
+        <td class="num muted">{{ site.currency_symbol }}{{ r.cost|floatformat:2|intcomma }}</td>
+        <td class="num"><b style="color:{% if r.profit >= 0 %}var(--ok){% else %}var(--danger,#c0392b){% endif %}">{{ site.currency_symbol }}{{ r.profit|floatformat:2|intcomma }}</b></td>
+        <td class="num"><span class="chip">{{ r.margin|floatformat:1 }}%</span></td>
+      </tr>
+      {% empty %}<tr><td colspan="6"><div class="empty"><p>No sales in this range.</p></div></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<!-- By order -->
+<div class="card">
+  <div class="card-head"><h3>Margin by order</h3><div class="spacer"></div>
+    <a href="{% url 'margin_export' 'order' %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}" class="btn btn-soft btn-sm">Export CSV</a></div>
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Order</th><th>Date</th><th>Customer</th><th>Salesperson</th>
+      <th class="num">Revenue</th><th class="num">Cost</th>
+      <th class="num">Profit</th><th class="num">Margin</th>
+    </tr></thead>
+    <tbody>
+      {% for r in d.orders %}
+      <tr>
+        <td class="mono">{{ r.order_no }}</td>
+        <td class="small muted">{{ r.date|date:"d M Y" }}</td>
+        <td>{{ r.customer }}</td>
+        <td>{{ r.salesperson }}</td>
+        <td class="num">{{ site.currency_symbol }}{{ r.revenue|floatformat:2|intcomma }}</td>
+        <td class="num muted">{{ site.currency_symbol }}{{ r.cost|floatformat:2|intcomma }}</td>
+        <td class="num"><b style="color:{% if r.profit >= 0 %}var(--ok){% else %}var(--danger,#c0392b){% endif %}">{{ site.currency_symbol }}{{ r.profit|floatformat:2|intcomma }}</b></td>
+        <td class="num"><span class="chip">{{ r.margin|floatformat:1 }}%</span></td>
+      </tr>
+      {% empty %}<tr><td colspan="8"><div class="empty"><p>No sales in this range.</p></div></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

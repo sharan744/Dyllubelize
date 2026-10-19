@@ -110,6 +110,9 @@
       <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
         {% include 'core/_icon.html' with name='file' %} Reports
       </a>
+      <a href="{% url 'margin_report' %}" class="{% if request.resolver_match.url_name == 'margin_report' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='chart' %} Profit &amp; Margin
+      </a>
       <a href="{% url 'incentives' %}" class="{% if 'incentives' in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='money' %} Incentives
       </a>

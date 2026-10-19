@@ -25,6 +25,7 @@ CODES = {
     "SALES": "4000",        # Sales income
     "RETURNS": "4900",      # Sales returns & allowances (contra-income)
     "COGS": "5000",         # Cost of goods sold
+    "FREIGHT": "6400",      # Freight & delivery / PO expenses
     "SHRINK": "5100",       # Inventory shrinkage / write-off & adjustments
     "INVENTORY": "1300",    # Inventory asset
     "BANK": "1010",         # Main bank
@@ -274,15 +275,39 @@ def bill_from_po(po, user=None, post=True):
         supplier=po.supplier, purchase_order=po, number=po.po_no,
         date=timezone.localdate(), memo=f"Goods received — {po.po_no}",
         status=DocStatus.DRAFT, created_by=user)
+    rate = getattr(po, "exchange_rate", None) or Decimal("1")
+    # Does this PO use the USD landed-cost model? If so, each line's unit_cost
+    # ALREADY has the expenses apportioned into it, so we must not add the
+    # expenses a second time. We book the goods at their supplier (pre-expense)
+    # value and capitalize the expenses as separate Inventory lines — the two
+    # together equal the landed cost, with no double counting.
+    uses_landed = any(q(getattr(l, "unit_cost_usd", 0)) > 0 for l in po.lines.all())
     for l in po.lines.select_related("product").all():
         qty = q(l.qty_received or l.qty_ordered)
-        amt = q(qty * q(l.unit_cost))
+        if uses_landed and q(getattr(l, "unit_cost_usd", 0)) > 0:
+            unit = q(q(l.unit_cost_usd) * rate)   # supplier price in BZD, pre-expense
+        else:
+            unit = q(l.unit_cost)                 # plain BZD cost (old-style PO)
+        amt = q(qty * unit)
         if amt <= 0:
             continue
         name = l.product.name if l.product_id else "Item"
         BillLine.objects.create(
             bill=bill, account=inv_asset,
-            description=f"{name} × {qty:g} @ {q(l.unit_cost)}", amount=amt)
+            description=f"{name} × {qty:g} @ {unit}", amount=amt)
+    # PO expenses (freight, duty, insurance, …). Capitalize into Inventory when
+    # the landed model is used (they belong in the goods' cost); otherwise book
+    # them to Freight & Delivery as before. USD expenses convert at the PO rate.
+    exp_acct = inv_asset if uses_landed else (acc(CODES.get("FREIGHT")) or inv_asset)
+    for e in po.expenses.all():
+        amt = q(e.amount_in_bzd(rate) if hasattr(e, "amount_in_bzd") else e.amount)
+        if amt <= 0:
+            continue
+        cur = getattr(e, "currency", "BZD")
+        label = f"Expense — {e.name}" + (f" ({e.amount} {cur} @ {rate})" if cur == "USD" else "")
+        BillLine.objects.create(
+            bill=bill, account=exp_acct,
+            description=label, amount=amt)
     if not bill.lines.exists():
         bill.delete()
         return None

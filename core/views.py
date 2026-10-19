@@ -307,6 +307,139 @@ def _report_data(start, end):
     }
 
 
+# ============================================================
+# Profit & margin report (admin only)
+# What it cost us (purchase price) vs what we sold it for (selling price),
+# and the profit / margin on every sale — by product, salesperson and order.
+# ============================================================
+def _margin_data(start, end):
+    """Cost-vs-sell margin figures for realized sales (delivered / completed)
+    whose revenue date falls inside [start, end]. All amounts are pre-tax."""
+    orders = _orders_for_accounting(
+        Order.objects
+        .filter(status__in=[OrderStatus.DELIVERED, OrderStatus.COMPLETED])
+        .select_related("customer", "salesperson")
+        .prefetch_related("items")
+    )
+
+    def odate(o):
+        d = o.completed_at or o.confirmed_at or o.created_at
+        return timezone.localtime(d).date()
+
+    def pct(profit, revenue):
+        return (profit / revenue * Decimal("100")).quantize(Decimal("0.1")) if revenue else Decimal("0.0")
+
+    by_product, by_salesperson = {}, {}
+    order_rows = []
+    tot_rev = Decimal("0.00")
+    tot_cost = Decimal("0.00")
+    units = Decimal("0")
+
+    for o in orders:
+        if not (start <= odate(o) <= end):
+            continue
+        rev = o.total              # after order-level discount, before tax
+        cost = o.total_cost        # snapshotted purchase cost of goods sold
+        profit = (rev - cost).quantize(Decimal("0.01"))
+        tot_rev += rev
+        tot_cost += cost
+
+        sp = o.salesperson.display_name if o.salesperson else "—"
+        s = by_salesperson.setdefault(
+            sp, {"orders": 0, "revenue": Decimal("0.00"),
+                 "cost": Decimal("0.00"), "profit": Decimal("0.00")})
+        s["orders"] += 1
+        s["revenue"] += rev
+        s["cost"] += cost
+        s["profit"] += profit
+
+        for it in o.items.all():
+            units += it.quantity
+            pr = by_product.setdefault(
+                it.product_name,
+                {"sku": it.sku, "qty": Decimal("0"), "revenue": Decimal("0.00"),
+                 "cost": Decimal("0.00"), "profit": Decimal("0.00")})
+            pr["qty"] += it.quantity
+            pr["revenue"] += it.line_total
+            pr["cost"] += it.line_cost_total
+            pr["profit"] += it.line_margin
+
+        order_rows.append({
+            "order_no": o.order_no, "date": odate(o), "customer": str(o.customer),
+            "salesperson": sp, "revenue": rev, "cost": cost, "profit": profit,
+            "margin": pct(profit, rev),
+        })
+
+    products = []
+    for name, v in by_product.items():
+        qty = v["qty"]
+        products.append({
+            "name": name, "sku": v["sku"], "qty": qty,
+            "avg_cost": (v["cost"] / qty).quantize(Decimal("0.01")) if qty else Decimal("0.00"),
+            "avg_sell": (v["revenue"] / qty).quantize(Decimal("0.01")) if qty else Decimal("0.00"),
+            "revenue": v["revenue"], "cost": v["cost"], "profit": v["profit"],
+            "margin": pct(v["profit"], v["revenue"]),
+        })
+    salespeople = []
+    for name, v in by_salesperson.items():
+        salespeople.append({
+            "name": name, "orders": v["orders"], "revenue": v["revenue"],
+            "cost": v["cost"], "profit": v["profit"],
+            "margin": pct(v["profit"], v["revenue"]),
+        })
+
+    products.sort(key=lambda r: r["profit"], reverse=True)
+    salespeople.sort(key=lambda r: r["profit"], reverse=True)
+    order_rows.sort(key=lambda r: r["date"], reverse=True)
+
+    total_profit = (tot_rev - tot_cost).quantize(Decimal("0.01"))
+    return {
+        "products": products, "salespeople": salespeople, "orders": order_rows,
+        "revenue": tot_rev, "cost": tot_cost, "profit": total_profit,
+        "margin": pct(total_profit, tot_rev),
+        "markup": (total_profit / tot_cost * Decimal("100")).quantize(Decimal("0.1")) if tot_cost else Decimal("0.0"),
+        "order_count": len(order_rows), "units": units,
+        "avg_profit": (total_profit / len(order_rows)).quantize(Decimal("0.01")) if order_rows else Decimal("0.00"),
+    }
+
+
+@role_required()  # admin only
+def margin_report(request):
+    start, end = _parse_range(request)
+    d = _margin_data(start, end)
+    return render(request, "core/margin.html", {"start": start, "end": end, "d": d})
+
+
+@role_required()  # admin only
+def margin_export(request, kind):
+    import csv
+    from django.http import HttpResponse
+    start, end = _parse_range(request)
+    d = _margin_data(start, end)
+    resp = HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = f'attachment; filename="margin_{kind}_{start}_{end}.csv"'
+    w = csv.writer(resp)
+    if kind == "product":
+        w.writerow(["Product", "SKU", "Qty sold", "Avg cost", "Avg sell",
+                    "Revenue", "Cost", "Profit", "Margin %"])
+        for r in d["products"]:
+            w.writerow([r["name"], r["sku"], r["qty"], r["avg_cost"], r["avg_sell"],
+                        r["revenue"], r["cost"], r["profit"], r["margin"]])
+    elif kind == "salesperson":
+        w.writerow(["Salesperson", "Orders", "Revenue", "Cost", "Profit", "Margin %"])
+        for r in d["salespeople"]:
+            w.writerow([r["name"], r["orders"], r["revenue"], r["cost"], r["profit"], r["margin"]])
+    elif kind == "order":
+        w.writerow(["Order", "Date", "Customer", "Salesperson",
+                    "Revenue", "Cost", "Profit", "Margin %"])
+        for r in d["orders"]:
+            w.writerow([r["order_no"], r["date"], r["customer"], r["salesperson"],
+                        r["revenue"], r["cost"], r["profit"], r["margin"]])
+    else:
+        w.writerow(["Unknown report"])
+    return resp
+
+
 @role_required()  # admin only
 def reports(request):
     from .models import SiteSetting

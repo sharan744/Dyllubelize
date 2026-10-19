@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Supplier, PurchaseOrder, PurchaseOrderLine
+from .models import Supplier, PurchaseOrder, PurchaseOrderLine, PurchaseOrderExpense
 
 
 @admin.register(Supplier)
@@ -14,9 +14,14 @@ class POLineInline(admin.TabularInline):
     extra = 0
 
 
+class POExpenseInline(admin.TabularInline):
+    model = PurchaseOrderExpense
+    extra = 0
+
+
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
     list_display = ("po_no", "supplier", "status", "order_date", "total_cost")
     list_filter = ("status", "order_date")
     search_fields = ("po_no", "supplier__name")
-    inlines = [POLineInline]
+    inlines = [POLineInline, POExpenseInline]

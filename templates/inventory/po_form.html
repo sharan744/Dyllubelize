@@ -2,34 +2,199 @@
 {% load humanize %}
 {% block title %}New Purchase Order{% endblock %}
 {% block page_title %}New Purchase Order{% endblock %}
-{% block subheading %}<div class="sub">Order stock from a supplier. Enter quantity and unit cost per product.</div>{% endblock %}
+{% block subheading %}<div class="sub">Goods are priced in USD. Enter the exchange rate and expenses — landed cost in BZD is worked out for you.</div>{% endblock %}
 {% block content %}
 <a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>
-<form method="post">{% csrf_token %}
+<form method="post" id="po-form">{% csrf_token %}
 <div class="detail-grid">
   <div class="card">
-    <div class="card-head"><h3>Products to order</h3></div>
+    <div class="card-head"><h3>Products to order</h3><div class="spacer"></div>
+      <span class="chip">Tip: you can type <b>20*0.86</b> in any price box</span></div>
     <div class="table-wrap">
-      <table class="tbl">
-        <thead><tr><th>Product</th><th class="num">In stock</th><th class="num" style="width:120px">Qty to order</th><th class="num" style="width:130px">Unit cost</th></tr></thead>
+      <table class="tbl" id="po-table">
+        <thead><tr>
+          <th>Product</th>
+          <th class="num">In stock</th>
+          <th class="num" style="width:70px">Qty</th>
+          <th class="num" style="width:100px">USD price</th>
+          <th class="num" style="width:90px">→ BZD</th>
+          <th class="num" style="width:110px">Landed cost<div class="small muted" style="font-weight:400">BZD</div></th>
+          <th class="num" style="width:100px">Selling<div class="small muted" style="font-weight:400">BZD</div></th>
+          <th class="num" style="width:80px">Margin</th>
+        </tr></thead>
         <tbody>
           {% for p in products %}
-          <tr>
+          <tr data-id="{{ p.id }}">
             <td><b>{{ p.name }}</b><div class="mono small muted">{{ p.sku }}</div></td>
             <td class="num small muted">{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}—{% endif %}</td>
-            <td class="num"><input type="number" name="qty_{{ p.id }}" min="0" step="1" value="0" style="width:100px;text-align:right"></td>
-            <td class="num"><input type="number" name="cost_{{ p.id }}" min="0" step="0.01" value="{{ p.cost_price|floatformat:2 }}" style="width:110px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="qty_{{ p.id }}" class="po-in in-qty" value="0" style="width:60px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="usd_{{ p.id }}" class="po-in in-usd calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>
+            <td class="num small muted cell-bzd">—</td>
+            <td class="num"><input type="text" inputmode="decimal" name="cost_{{ p.id }}" class="po-in in-cost calc" value="" placeholder="auto" style="width:100px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="sell_{{ p.id }}" class="po-in in-sell calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>
+            <td class="num cell-margin small muted">—</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+
   <div class="card card-pad">
     <h3 style="margin-bottom:12px">PO details</h3>
     {% include 'core/_form.html' %}
-    <div class="form-actions"><button class="btn btn-primary btn-block">Create PO</button></div>
+
+    <!-- Exchange rate -->
+    <div style="margin-top:14px">
+      <label class="small muted" style="display:block;margin-bottom:4px">Exchange rate — BZD per 1 USD</label>
+      <input type="text" inputmode="decimal" name="exchange_rate" id="fx-rate" value="2.06"
+             class="calc" style="width:120px;text-align:right;font-weight:700">
+    </div>
+
+    <!-- Expenses -->
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+      <h4 style="margin:0 0 2px">Other expenses</h4>
+      <div class="sub small muted" style="margin-bottom:10px">Freight, duty, insurance, uplift, etc. Pick USD or BZD per row — USD is converted at the rate above.</div>
+      <div id="exp-rows"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="exp-add" style="margin-top:4px">+ Add expense</button>
+    </div>
+
+    <!-- Landed-cost summary -->
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Goods (USD)</span><b id="sum-goods-usd">$0.00</b></div>
+      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Goods (BZD)</span><b id="sum-goods-bzd">$0.00</b></div>
+      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Expenses (BZD)</span><b id="sum-exp-bzd">$0.00</b></div>
+      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Expense ratio</span><b id="sum-ratio">1.0000</b></div>
+      <div class="flex" style="justify-content:space-between;margin:6px 0;font-size:1.05rem">
+        <span><b>Landed multiplier</b><div class="small muted" style="font-weight:400">USD price × this = landed BZD</div></span>
+        <b id="sum-mult" style="color:var(--accent-ink)">0.0000</b></div>
+      <div class="flex" style="justify-content:space-between;margin:6px 0;border-top:1px solid var(--line);padding-top:8px">
+        <span><b>Total landed (BZD)</b></span><b id="sum-total">$0.00</b></div>
+    </div>
+
+    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary btn-block">Create PO</button></div>
   </div>
 </div>
 </form>
+
+<script>
+(function () {
+  var SYM = "{{ site.currency_symbol|escapejs }}";
+  var fmt = function (n) { return SYM + (isFinite(n) ? n : 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); };
+
+  // Safe arithmetic: only numbers and + - * / ( ) . allowed → "20*0.86" => 17.2
+  function evalExpr(raw) {
+    if (raw == null) return NaN;
+    var s = String(raw).trim();
+    if (s === '') return NaN;
+    if (!/^[0-9+\-*/(). ]+$/.test(s)) return NaN;
+    try { var v = Function('"use strict";return (' + s + ')')(); return (typeof v === 'number' && isFinite(v)) ? v : NaN; }
+    catch (e) { return NaN; }
+  }
+  function num(el) { var v = evalExpr(el.value); return isNaN(v) ? 0 : v; }
+
+  var tbody = document.querySelector('#po-table tbody');
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var fxEl = document.getElementById('fx-rate');
+  var expWrap = document.getElementById('exp-rows');
+
+  function expensesBZD() {
+    var fx = num(fxEl), total = 0;
+    expWrap.querySelectorAll('.exp-row').forEach(function (r) {
+      var amt = num(r.querySelector('.exp-amt'));
+      var cur = r.querySelector('.exp-cur').value;
+      if (amt > 0) total += (cur === 'USD') ? amt * fx : amt;
+    });
+    return total;
+  }
+
+  function recalc() {
+    var fx = num(fxEl);
+    // goods USD across all rows with a qty
+    var goodsUsd = 0;
+    rows.forEach(function (tr) {
+      var qty = num(tr.querySelector('.in-qty'));
+      var usd = num(tr.querySelector('.in-usd'));
+      if (qty > 0) goodsUsd += qty * usd;
+    });
+    var goodsBzd = goodsUsd * fx;
+    var expBzd = expensesBZD();
+    var ratio = goodsBzd > 0 ? (goodsBzd + expBzd) / goodsBzd : 1;
+    var mult = fx * ratio;
+
+    document.getElementById('sum-goods-usd').textContent = fmt(goodsUsd);
+    document.getElementById('sum-goods-bzd').textContent = fmt(goodsBzd);
+    document.getElementById('sum-exp-bzd').textContent = fmt(expBzd);
+    document.getElementById('sum-ratio').textContent = ratio.toFixed(4);
+    document.getElementById('sum-mult').textContent = mult.toFixed(4);
+
+    var totalLanded = 0;
+    rows.forEach(function (tr) {
+      var qty = num(tr.querySelector('.in-qty'));
+      var usd = num(tr.querySelector('.in-usd'));
+      var costEl = tr.querySelector('.in-cost');
+      var sell = num(tr.querySelector('.in-sell'));
+      // → BZD per unit (before expense ratio)
+      tr.querySelector('.cell-bzd').textContent = usd > 0 ? fmt(usd * fx) : '—';
+      // suggested landed cost (unless the user typed their own)
+      var suggested = usd * mult;
+      if (costEl.dataset.dirty !== '1') {
+        costEl.value = (usd > 0) ? suggested.toFixed(2) : '';
+      }
+      var cost = num(costEl);
+      // margin on cost
+      var mCell = tr.querySelector('.cell-margin');
+      if (cost > 0 && sell > 0) {
+        var mp = (sell - cost) / cost * 100;
+        mCell.textContent = mp.toFixed(1) + '%';
+        mCell.style.color = mp >= 0 ? 'var(--ok)' : 'var(--danger,#c0392b)';
+      } else { mCell.textContent = '—'; mCell.style.color = ''; }
+      if (qty > 0) totalLanded += qty * cost;
+    });
+    document.getElementById('sum-total').textContent = fmt(totalLanded);
+  }
+
+  // Normalise a calc field to its evaluated number when the user leaves it.
+  function bindCalc(el) {
+    el.addEventListener('input', function () {
+      if (el.classList.contains('in-cost')) el.dataset.dirty = el.value.trim() === '' ? '' : '1';
+      recalc();
+    });
+    el.addEventListener('blur', function () {
+      var v = evalExpr(el.value);
+      if (!isNaN(v)) el.value = (+v).toFixed(2);
+      recalc();
+    });
+  }
+  rows.forEach(function (tr) {
+    tr.querySelectorAll('.po-in').forEach(bindCalc);
+  });
+  fxEl.addEventListener('input', recalc);
+  fxEl.addEventListener('blur', function () { var v = evalExpr(fxEl.value); if (!isNaN(v)) fxEl.value = (+v).toString(); recalc(); });
+
+  // Expense rows
+  function addExp(name, amount, cur) {
+    var row = document.createElement('div');
+    row.className = 'flex exp-row';
+    row.style.cssText = 'gap:6px;margin-bottom:8px;align-items:center';
+    row.innerHTML =
+      '<input type="text" name="expense_name" placeholder="Expense (e.g. Ocean freight)" value="' + (name || '') + '" style="flex:1">' +
+      '<input type="text" inputmode="decimal" name="expense_amount" class="exp-amt" placeholder="0.00" value="' + (amount || '') + '" style="width:92px;text-align:right">' +
+      '<select name="expense_currency" class="exp-cur" style="width:68px">' +
+        '<option value="BZD"' + (cur === 'USD' ? '' : ' selected') + '>BZD</option>' +
+        '<option value="USD"' + (cur === 'USD' ? ' selected' : '') + '>USD</option>' +
+      '</select>' +
+      '<button type="button" class="btn btn-ghost btn-sm exp-del" title="Remove">&times;</button>';
+    expWrap.appendChild(row);
+    var amtEl = row.querySelector('.exp-amt');
+    amtEl.addEventListener('input', recalc);
+    amtEl.addEventListener('blur', function () { var v = evalExpr(amtEl.value); if (!isNaN(v)) amtEl.value = (+v).toFixed(2); recalc(); });
+    row.querySelector('.exp-cur').addEventListener('change', recalc);
+    row.querySelector('.exp-del').addEventListener('click', function () { row.remove(); recalc(); });
+  }
+  document.getElementById('exp-add').addEventListener('click', function () { addExp(); });
+  addExp();   // one empty row to start
+  recalc();
+})();
+</script>
 {% endblock %}

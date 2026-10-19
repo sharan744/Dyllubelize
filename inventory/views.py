@@ -8,7 +8,7 @@ from accounts.models import Role
 from catalogue.models import Product, StockMovement, Category
 from core.permissions import role_required
 from .forms import SupplierForm, PurchaseOrderForm
-from .models import Supplier, PurchaseOrder, PurchaseOrderLine
+from .models import Supplier, PurchaseOrder, PurchaseOrderLine, PurchaseOrderExpense
 
 INV_ROLES = (Role.PROCESSING, Role.DISPATCH)
 
@@ -142,19 +142,65 @@ def po_create(request):
             po = form.save(commit=False)
             po.created_by = request.user
             po.status = PurchaseOrder.Status.DRAFT
+            rate = _dec(request.POST.get("exchange_rate"), "2.00")
+            if rate <= 0:
+                rate = Decimal("1")
+            po.exchange_rate = rate
             po.save()
-            any_line = False
+
+            # ---- Pass 1: gather the lines (USD price) and expenses, so we can
+            # work out the landed multiplier (FX × expense ratio) for the whole PO.
+            pending = []  # (product, qty, usd_price, cost_override_or_None, sell)
+            goods_usd = Decimal("0.00")
             for p in products:
                 qty = _dec(request.POST.get(f"qty_{p.id}"))
-                cost = _dec(request.POST.get(f"cost_{p.id}"), str(p.cost_price))
-                if qty > 0:
-                    PurchaseOrderLine.objects.create(
-                        po=po, product=p, qty_ordered=qty, unit_cost=cost)
-                    any_line = True
-            if not any_line:
+                if qty <= 0:
+                    continue
+                usd = _dec(request.POST.get(f"usd_{p.id}"))
+                raw_cost = (request.POST.get(f"cost_{p.id}") or "").strip()
+                cost_override = _dec(raw_cost) if raw_cost else None
+                sell = _dec(request.POST.get(f"sell_{p.id}"))
+                pending.append((p, qty, usd, cost_override, sell))
+                goods_usd += qty * usd
+
+            if not pending:
                 po.delete()
                 messages.error(request, "Add a quantity for at least one product.")
                 return redirect("po_create")
+
+            # Expenses (name, amount, currency) — USD expenses convert to BZD.
+            exp_names = request.POST.getlist("expense_name")
+            exp_amounts = request.POST.getlist("expense_amount")
+            exp_currencies = request.POST.getlist("expense_currency")
+            expenses_bzd = Decimal("0.00")
+            exp_rows = []
+            for i, nm in enumerate(exp_names):
+                nm = (nm or "").strip()
+                amt = _dec(exp_amounts[i] if i < len(exp_amounts) else "0")
+                cur = (exp_currencies[i] if i < len(exp_currencies) else "BZD").upper()
+                if cur not in ("BZD", "USD"):
+                    cur = "BZD"
+                if nm and amt > 0:
+                    exp_rows.append((nm, amt, cur))
+                    expenses_bzd += amt * rate if cur == "USD" else amt
+
+            # Landed multiplier: USD → BZD landed cost, expenses spread by value.
+            goods_bzd = goods_usd * rate
+            ratio = ((goods_bzd + expenses_bzd) / goods_bzd) if goods_bzd > 0 else Decimal("1")
+            landed_mult = rate * ratio
+
+            # ---- Pass 2: write the lines with their landed cost.
+            for p, qty, usd, cost_override, sell in pending:
+                landed = cost_override if cost_override is not None else (usd * landed_mult)
+                PurchaseOrderLine.objects.create(
+                    po=po, product=p, qty_ordered=qty,
+                    unit_cost_usd=usd,
+                    unit_cost=Decimal(landed).quantize(Decimal("0.01")),
+                    sell_price=sell,
+                )
+            for nm, amt, cur in exp_rows:
+                PurchaseOrderExpense.objects.create(po=po, name=nm, amount=amt, currency=cur)
+
             messages.success(request, f"{po.po_no} created.")
             return redirect("po_detail", pk=po.pk)
     else:
