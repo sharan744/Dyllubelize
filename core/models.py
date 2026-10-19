@@ -3,8 +3,30 @@ from decimal import Decimal
 from django.db import models
 
 
+# Currencies that can be selected in Admin & Settings. The symbol is filled in
+# automatically from the chosen currency.
+CURRENCY_SYMBOLS = {
+    "BZD": "$",   # Belize Dollar
+    "USD": "$",   # US Dollar
+    "MXN": "$",   # Mexican Peso
+    "GBP": "£",   # British Pound
+    "EUR": "€",   # Euro
+    "CNY": "¥",   # Chinese Yuan
+    "INR": "₹",   # Indian Rupee
+}
+
+
 class SiteSetting(models.Model):
     """Singleton holding company details shown on printed documents."""
+
+    class Currency(models.TextChoices):
+        BZD = "BZD", "Belize Dollar (BZD)"
+        USD = "USD", "US Dollar (USD)"
+        MXN = "MXN", "Mexican Peso (MXN)"
+        GBP = "GBP", "British Pound (GBP)"
+        EUR = "EUR", "Euro (EUR)"
+        CNY = "CNY", "Chinese Yuan (CNY)"
+        INR = "INR", "Indian Rupee (INR)"
 
     company_name = models.CharField(max_length=200, default="United Distributors Ltd")
     tagline = models.CharField(max_length=200, blank=True, default="Distribution & Supply")
@@ -12,8 +34,14 @@ class SiteSetting(models.Model):
     phone = models.CharField(max_length=60, blank=True, default="")
     email = models.EmailField(blank=True, default="")
     tax_id = models.CharField("Company Tax ID (TIN)", max_length=60, blank=True, default="")
-    currency_symbol = models.CharField(max_length=5, default="$")
-    currency_code = models.CharField(max_length=5, default="BZD")
+    currency_code = models.CharField(
+        "Currency", max_length=5, default="BZD", choices=Currency.choices,
+        help_text="Pick the currency used across the app. The symbol is set automatically.",
+    )
+    currency_symbol = models.CharField(
+        max_length=5, default="$", blank=True,
+        help_text="Filled in automatically from the selected currency.",
+    )
 
     # Accounts / financial reporting visibility
     accounts_follow_invoice_visibility = models.BooleanField(
@@ -66,6 +94,9 @@ class SiteSetting(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1
+        # Keep the symbol in sync with the chosen currency.
+        self.currency_symbol = CURRENCY_SYMBOLS.get(
+            self.currency_code, self.currency_symbol or "$")
         super().save(*args, **kwargs)
 
     @classmethod

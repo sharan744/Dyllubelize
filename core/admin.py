@@ -9,7 +9,8 @@ class SiteSettingAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Company", {"fields": ("company_name", "tagline", "address",
                                  "phone", "email", "tax_id")}),
-        ("Currency", {"fields": ("currency_symbol", "currency_code")}),
+        ("Currency", {"fields": ("currency_code", "currency_symbol"),
+                      "description": "Choose the currency — the symbol is set automatically."}),
         ("Accounting", {
             "fields": ("accounts_follow_invoice_visibility",),
             "description": (
@@ -20,6 +21,8 @@ class SiteSettingAdmin(admin.ModelAdmin):
         ("Tax / VAT", {"fields": ("tax_enabled", "tax_label", "tax_percent")}),
         ("Quotation", {"fields": ("quote_validity_days", "quote_terms")}),
     )
+
+    readonly_fields = ("currency_symbol",)
 
     def has_add_permission(self, request):
         return not SiteSetting.objects.exists()
