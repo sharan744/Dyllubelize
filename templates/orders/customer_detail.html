@@ -14,17 +14,22 @@
     <div class="card-head"><h3>Order History</h3><div class="spacer"></div><span class="chip">{{ customer.order_count }} order(s)</span></div>
     <div class="table-wrap">
       <table class="tbl">
-        <thead><tr><th>Order</th><th>Status</th><th class="num">Total</th><th>Date</th></tr></thead>
+        <thead><tr><th>Order</th><th>Invoice No.</th><th>Status</th><th class="num">Total</th><th>Date</th><th class="num">Invoice</th></tr></thead>
         <tbody>
           {% for o in orders %}
           <tr onclick="location.href='{% url 'order_detail' o.pk %}'" style="cursor:pointer">
             <td><span class="ordno">{{ o.order_no }}</span></td>
+            <td class="mono small">{% if o.invoice %}{{ o.invoice.number }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
             <td class="num">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
             <td class="small muted">{{ o.created_at|date:"d M Y" }}</td>
+            <td class="num" onclick="event.stopPropagation()">
+              <a href="{% url 'order_invoice' o.pk %}" class="btn btn-ghost btn-sm">{% include 'core/_icon.html' with name='file' %} View</a>
+              <a href="{% url 'order_invoice_pdf' o.pk %}" class="btn btn-ghost btn-sm" title="Download PDF">PDF</a>
+            </td>
           </tr>
           {% empty %}
-          <tr><td colspan="4"><div class="empty"><p>No orders yet for this customer.</p></div></td></tr>
+          <tr><td colspan="6"><div class="empty"><p>No orders yet for this customer.</p></div></td></tr>
           {% endfor %}
         </tbody>
       </table>

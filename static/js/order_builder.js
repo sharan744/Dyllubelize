@@ -245,6 +245,23 @@ function closeInfo() {
   if (m) m.remove();
 }
 
+// Full-size image viewer — opened by double-clicking the photo in the info modal.
+function openLightbox(src, alt) {
+  if (!src) return;
+  const existing = document.getElementById('pk-lightbox');
+  if (existing) existing.remove();
+  const box = document.createElement('div');
+  box.id = 'pk-lightbox';
+  box.className = 'pk-lightbox';
+  box.innerHTML = `<button type="button" class="pk-lightbox-x" title="Close">✕</button>`
+    + `<img src="${src}" alt="${esc(alt || '')}">`;
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  box.addEventListener('click', close);          // click anywhere (or the ✕) closes
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(box);
+}
+
 async function openInfo(id) {
   closeInfo();
   const overlay = document.createElement('div');
@@ -314,6 +331,17 @@ async function openInfo(id) {
     </div>`;
 
   overlay.querySelector('.pk-modal-x').addEventListener('click', closeInfo);
+  // Click (or double-click) the product photo to view it full size.
+  const modalImgWrap = overlay.querySelector('.pk-modal-img');
+  const modalImg = overlay.querySelector('.pk-modal-img img');
+  if (modalImg) {
+    modalImg.title = 'Click to enlarge';
+    modalImg.setAttribute('draggable', 'false');
+    const zoom = (e) => { e.preventDefault(); e.stopPropagation(); openLightbox(d.image, d.name); };
+    modalImg.addEventListener('click', zoom);
+    modalImg.addEventListener('dblclick', zoom);
+    if (modalImgWrap) modalImgWrap.addEventListener('click', zoom);
+  }
   overlay.querySelector('[data-addmain]')?.addEventListener('click', () => {
     addToCart(Number(d.id)); closeInfo();
   });

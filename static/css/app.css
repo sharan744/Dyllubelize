@@ -328,9 +328,10 @@ textarea { resize: vertical; }
   overflow: hidden; transition: all .18s; display: flex; flex-direction: column;
 }
 .prod:hover { box-shadow: var(--shadow); transform: translateY(-2px); border-color: var(--line); }
-.prod .thumb { aspect-ratio: 4/3; background: var(--paper-2); display: grid; place-items: center;
-  color: var(--tx-mute); position: relative; overflow: hidden; }
-.prod .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.prod .thumb { aspect-ratio: 4/3; background: #fff; display: grid; place-items: center;
+  color: var(--tx-mute); position: relative; overflow: hidden; padding: 8px; }
+/* show the whole product photo, never cropped */
+.prod .thumb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
 .prod .thumb .cat-tag { position: absolute; top: 8px; left: 8px; }
 .prod .body { padding: 13px 14px; flex: 1; display: flex; flex-direction: column; }
 .prod .body .nm { font-weight: 700; font-size: .92rem; color: var(--ink); line-height: 1.3; }
@@ -367,9 +368,22 @@ textarea { resize: vertical; }
   width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: .9rem; }
 .pk-modal-x:hover { background: #e7e0d2; }
 .pk-modal-head { display: flex; gap: 18px; align-items: flex-start; }
-.pk-modal-img { width: 220px; height: 220px; flex: 0 0 220px; border-radius: 12px; overflow: hidden;
-  background: #fff; border: 1px solid var(--line); display: grid; place-items: center; }
-.pk-modal-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* Image area hugs the product photo's own shape (no forced square / no crop).
+   Double-click the photo to view it full size. */
+.pk-modal-img { width: 240px; flex: 0 0 240px; border-radius: 12px; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); display: grid; place-items: center;
+  padding: 6px; cursor: zoom-in; user-select: none; }
+.pk-modal-img img { width: 100%; height: auto; max-height: 300px; object-fit: contain; display: block; }
+
+/* Full-size image viewer (double-click the modal photo) */
+.pk-lightbox { position: fixed; inset: 0; z-index: 260; background: rgba(10,9,14,.9);
+  display: grid; place-items: center; padding: 24px; cursor: zoom-out; }
+.pk-lightbox img { max-width: 94vw; max-height: 94vh; object-fit: contain;
+  border-radius: 10px; box-shadow: 0 20px 70px rgba(0,0,0,.6); background: #fff; }
+.pk-lightbox .pk-lightbox-x { position: fixed; top: 16px; right: 20px; border: none;
+  background: rgba(255,255,255,.15); color: #fff; width: 38px; height: 38px; border-radius: 50%;
+  font-size: 1.1rem; cursor: pointer; }
+.pk-lightbox .pk-lightbox-x:hover { background: rgba(255,255,255,.3); }
 .pk-modal-price { font-weight: 800; color: var(--accent-ink); font-size: 1.3rem; margin-top: 8px; }
 .pk-modal-body { margin-top: 16px; }
 .pk-modal-desc { line-height: 1.6; margin: 0 0 14px; }
@@ -479,7 +493,8 @@ hr.sep { border: none; border-top: 1px solid var(--line-2); margin: 20px 0; }
   width: 40px; height: 40px; place-items: center; cursor: pointer; }
 @media (max-width: 520px) {
   .grid-4, .grid-2 { grid-template-columns: 1fr; }
-  /* Stack the info-modal header on phones and let the (now larger) image size down */
+  /* Stack the info-modal header on phones and let the image size down */
   .pk-modal-head { flex-direction: column; align-items: center; text-align: center; }
-  .pk-modal-img { width: 180px; height: 180px; flex: 0 0 180px; }
+  .pk-modal-img { width: 200px; flex: 0 0 auto; }
+  .pk-modal-img img { max-height: 220px; }
 }

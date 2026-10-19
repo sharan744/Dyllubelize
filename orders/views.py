@@ -35,7 +35,7 @@ def customer_detail(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
     return render(request, "orders/customer_detail.html", {
         "customer": customer,
-        "orders": customer.orders.all()[:20],
+        "orders": customer.orders.select_related("invoice").all()[:20],
     })
 
 
@@ -298,6 +298,255 @@ def order_quotation(request, pk):
         "valid_until": valid_until,
         "can_edit": can_edit,
     })
+
+
+# ============================================================
+# Order invoice — printable view + PDF download
+# ============================================================
+def _invoice_context(order):
+    """Build the figures + meta for an order's invoice. If a formal accounting
+    Invoice exists for the order, its number / date / due / paid / balance are
+    used; otherwise the invoice is drawn straight from the order."""
+    from decimal import Decimal
+    from core.models import SiteSetting
+    site = SiteSetting.get()
+
+    net = order.total  # subtotal minus order discount
+    if site.tax_enabled and site.tax_percent:
+        tax_amount = (net * site.tax_percent / Decimal("100")).quantize(Decimal("0.01"))
+    else:
+        tax_amount = Decimal("0.00")
+    grand_total = net + tax_amount
+
+    inv = getattr(order, "invoice", None)
+    if inv is not None:
+        number = inv.number
+        inv_date = inv.date
+        due_date = inv.due_date
+        amount_paid = inv.amount_paid
+        balance = (grand_total - amount_paid)
+        status = inv.get_status_display()
+        status_code = inv.status
+    else:
+        number = order.order_no
+        inv_date = (order.completed_at or order.confirmed_at or order.created_at)
+        try:
+            inv_date = timezone.localtime(inv_date).date()
+        except Exception:
+            inv_date = timezone.localdate()
+        due_date = inv_date + timezone.timedelta(days=30)
+        amount_paid = Decimal("0.00")
+        balance = grand_total
+        status = "Proforma" if order.is_open else "Issued"
+        status_code = "open"
+
+    return {
+        "order": order, "site": site,
+        "net": net, "tax_amount": tax_amount, "grand_total": grand_total,
+        "inv_number": number, "inv_date": inv_date, "due_date": due_date,
+        "amount_paid": amount_paid, "balance": balance,
+        "inv_status": status, "inv_status_code": status_code,
+        "has_invoice": inv is not None,
+    }
+
+
+@role_required(*ALL_STAFF)
+def order_invoice(request, pk):
+    """Printable invoice for a single order (view + Save as PDF / Download PDF)."""
+    order = get_object_or_404(
+        Order.objects.select_related("customer", "salesperson").prefetch_related("items"),
+        pk=pk,
+    )
+    return render(request, "orders/invoice.html", _invoice_context(order))
+
+
+@role_required(*ALL_STAFF)
+def order_invoice_pdf(request, pk):
+    """Server-generated PDF of the order invoice (reportlab)."""
+    from django.http import HttpResponse
+    order = get_object_or_404(
+        Order.objects.select_related("customer", "salesperson").prefetch_related("items"),
+        pk=pk,
+    )
+    ctx = _invoice_context(order)
+    pdf_bytes = _render_invoice_pdf(ctx)
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="Invoice-{ctx["inv_number"]}.pdf"'
+    return resp
+
+
+def _render_invoice_pdf(ctx):
+    """Lay out the invoice with reportlab and return the PDF as bytes."""
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                    TableStyle)
+
+    order = ctx["order"]
+    site = ctx["site"]
+    sym = site.currency_symbol or "$"
+
+    def money(v):
+        return f"{sym}{v:,.2f}"
+
+    DARK = colors.HexColor("#1b1a24")
+    ACC = colors.HexColor("#e0603a")
+    MUTE = colors.HexColor("#6b6577")
+    LINE = colors.HexColor("#d9d2c4")
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=16 * mm, rightMargin=16 * mm,
+                            topMargin=16 * mm, bottomMargin=16 * mm,
+                            title=f"Invoice {ctx['inv_number']}")
+    ss = getSampleStyleSheet()
+    h_co = ParagraphStyle("co", parent=ss["Normal"], fontName="Helvetica-Bold",
+                          fontSize=17, textColor=DARK, leading=20)
+    tag = ParagraphStyle("tag", parent=ss["Normal"], fontName="Helvetica-Bold",
+                         fontSize=7.5, textColor=ACC, leading=10)
+    small = ParagraphStyle("small", parent=ss["Normal"], fontSize=8, textColor=MUTE, leading=12)
+    lbl = ParagraphStyle("lbl", parent=ss["Normal"], fontName="Helvetica-Bold",
+                         fontSize=7.5, textColor=ACC, leading=12)
+    body = ParagraphStyle("body", parent=ss["Normal"], fontSize=9, leading=13)
+    bodyb = ParagraphStyle("bodyb", parent=ss["Normal"], fontName="Helvetica-Bold",
+                           fontSize=9.5, leading=13, textColor=DARK)
+    titleR = ParagraphStyle("titleR", parent=ss["Normal"], fontName="Helvetica-Bold",
+                            fontSize=15, textColor=ACC, alignment=2, leading=18)
+    dnoR = ParagraphStyle("dnoR", parent=ss["Normal"], fontName="Courier-Bold",
+                          fontSize=13, textColor=DARK, alignment=2, leading=16)
+    metaR = ParagraphStyle("metaR", parent=ss["Normal"], fontSize=8.5, textColor=MUTE,
+                           alignment=2, leading=13)
+    cellR = ParagraphStyle("cellR", parent=ss["Normal"], fontSize=9, alignment=2, leading=12)
+    cellL = ParagraphStyle("cellL", parent=ss["Normal"], fontSize=9, leading=12)
+
+    story = []
+
+    # ---- Header: company (left) + invoice meta (right) ----
+    co_lines = [Paragraph(site.tagline or "", tag), Paragraph(site.company_name or "", h_co)]
+    info = []
+    if site.address:
+        info.append(site.address.replace("\n", "<br/>"))
+    tp = []
+    if site.phone:
+        tp.append(f"Tel: {site.phone}")
+    if site.email:
+        tp.append(site.email)
+    if tp:
+        info.append(" · ".join(tp))
+    if getattr(site, "tax_id", ""):
+        info.append(f"Tax ID: {site.tax_id}")
+    if info:
+        co_lines.append(Paragraph("<br/>".join(info), small))
+    co_cell = co_lines
+
+    meta_tbl = Table([
+        [Paragraph("INVOICE", titleR)],
+        [Paragraph(ctx["inv_number"], dnoR)],
+        [Paragraph(
+            f"Date: <b>{ctx['inv_date']:%d %b %Y}</b><br/>"
+            f"Due: <b>{ctx['due_date']:%d %b %Y}</b><br/>"
+            f"Order: <b>{order.order_no}</b><br/>"
+            f"Salesperson: <b>{(order.salesperson.display_name if order.salesperson else '-')}</b>",
+            metaR)],
+    ], colWidths=[70 * mm])
+    meta_tbl.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
+                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+
+    head = Table([[co_cell, meta_tbl]], colWidths=[98 * mm, 70 * mm])
+    head.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, -1), 2, DARK),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story += [head, Spacer(1, 10)]
+
+    # ---- Bill to / Billing address ----
+    cust = order.customer
+    billto = [Paragraph("BILL TO", lbl),
+              Paragraph(cust.company_name or cust.name or "", bodyb)]
+    line2 = []
+    if cust.company_name and cust.name:
+        line2.append(f"Attn: {cust.name}")
+    if cust.mobile:
+        line2.append(cust.mobile)
+    if cust.email:
+        line2.append(cust.email)
+    if getattr(cust, "tax_id", ""):
+        line2.append(f"Tax ID: {cust.tax_id}")
+    if line2:
+        billto.append(Paragraph("<br/>".join(line2), body))
+    addr = cust.billing_address or cust.delivery_address or "-"
+    addr_cell = [Paragraph("BILLING ADDRESS", lbl),
+                 Paragraph(addr.replace("\n", "<br/>"), body)]
+    bt = Table([[billto, addr_cell]], colWidths=[84 * mm, 84 * mm])
+    bt.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOX", (0, 0), (0, 0), 0.6, LINE), ("BOX", (1, 0), (1, 0), 0.6, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story += [bt, Spacer(1, 12)]
+
+    # ---- Line items ----
+    rows = [[Paragraph("<b>Product</b>", cellL), Paragraph("<b>SKU</b>", cellL),
+             Paragraph("<b>Unit price</b>", cellR), Paragraph("<b>Qty</b>", cellR),
+             Paragraph("<b>Amount</b>", cellR)]]
+    for i in order.items.all():
+        rows.append([
+            Paragraph(i.product_name, cellL),
+            Paragraph(i.sku or "", cellL),
+            Paragraph(money(i.unit_price), cellR),
+            Paragraph(f"{i.quantity:.0f}", cellR),
+            Paragraph(money(i.line_total), cellR),
+        ])
+    items = Table(rows, colWidths=[72 * mm, 28 * mm, 26 * mm, 16 * mm, 26 * mm], repeatRows=1)
+    items.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#faf7f1")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story += [items, Spacer(1, 8)]
+
+    # ---- Totals ----
+    trows = [["Subtotal", money(order.subtotal)]]
+    if order.discount_percent:
+        trows.append([f"Discount ({order.discount_percent:.0f}%)", "-" + money(order.discount_amount)])
+        trows.append(["Net", money(ctx["net"])])
+    if site.tax_enabled and site.tax_percent:
+        trows.append([f"{site.tax_label} ({site.tax_percent:.0f}%)", money(ctx["tax_amount"])])
+    trows.append([f"Total ({site.currency_code})", money(ctx["grand_total"])])
+    if ctx["has_invoice"]:
+        trows.append(["Paid", money(ctx["amount_paid"])])
+        trows.append(["Balance due", money(ctx["balance"])])
+    tdata = [[Paragraph(a, cellL if idx != len(trows) - 1 else bodyb),
+              Paragraph(b, cellR)] for idx, (a, b) in enumerate(trows)]
+    totals = Table(tdata, colWidths=[44 * mm, 36 * mm], hAlign="RIGHT")
+    grand_row = 2 + (2 if order.discount_percent else 0) + (1 if (site.tax_enabled and site.tax_percent) else 0) - 1
+    totals.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEABOVE", (0, grand_row), (-1, grand_row), 1.2, DARK),
+        ("FONTNAME", (0, grand_row), (-1, grand_row), "Helvetica-Bold"),
+        ("FONTSIZE", (0, grand_row), (-1, grand_row), 11),
+    ]))
+    story += [totals, Spacer(1, 18)]
+
+    if order.remarks:
+        story += [Paragraph("REMARKS", lbl), Paragraph(order.remarks.replace("\n", "<br/>"), body), Spacer(1, 10)]
+
+    note = ("Prices are before " + (site.tax_label or "tax") + "; the total includes " + (site.tax_label or "tax") + "."
+            if (site.tax_enabled and site.tax_percent) else "Prices are exclusive of tax.")
+    story += [Spacer(1, 10), Paragraph(note + f"  Thank you for your business — {site.company_name}.",
+                                       ParagraphStyle("foot", parent=small, alignment=1))]
+
+    doc.build(story)
+    return buf.getvalue()
 
 
 # ---- QuickBooks-style inline line editing (with calculator expressions) ----
