@@ -85,6 +85,16 @@ class Order(models.Model):
     # discount applied on the whole order (percentage)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
+    # Tax treatment for this order's invoice — GST (uses the GST rate in
+    # Admin & Settings) or Non (tax-exempt, no GST charged).
+    class TaxMode(models.TextChoices):
+        GST = "GST", "GST"
+        NON = "NON", "Non"
+    tax_mode = models.CharField(
+        max_length=3, choices=TaxMode.choices, default=TaxMode.GST,
+        help_text="GST = charge the GST rate from Admin & Settings; Non = tax-exempt.",
+    )
+
     confirmed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="orders_confirmed",
@@ -142,12 +152,16 @@ class Order(models.Model):
     # --- Tax (mirrors the invoice: uses the GST settings in Admin & Settings) ---
     @property
     def _tax_setting(self):
-        """(rate, label) from SiteSetting; rate is 0 when tax is disabled."""
+        """(rate, label) for this order. 'Non' orders are tax-exempt (0%);
+        'GST' orders use the GST rate/label from SiteSetting."""
         try:
             from core.models import SiteSetting
             s = SiteSetting.get()
+            label = s.tax_label or "GST"
+            if self.tax_mode == self.TaxMode.NON:
+                return (Decimal("0"), label)
             if getattr(s, "tax_enabled", False):
-                return (s.tax_percent or Decimal("0"), s.tax_label or "GST")
+                return (s.tax_percent or Decimal("0"), label)
         except Exception:
             pass
         return (Decimal("0"), "GST")

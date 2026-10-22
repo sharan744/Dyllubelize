@@ -6,6 +6,7 @@
 {% block topbar_actions %}
   <a href="{% url 'order_quotation' order.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='file' %} Quotation</a>
   <a href="{% url 'order_invoice' order.pk %}" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Invoice</a>
+  <a href="{% url 'order_dispatch_note' order.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='truck' %} Dispatch Note</a>
   {% if user.is_dispatch or user.is_delivery or user.is_admin_role %}
     {% if order.status == 'dispatched' or order.status == 'delivered' or order.status == 'completed' %}
     <a href="{% url 'return_create' %}?order={{ order.pk }}" class="btn btn-ghost">{% include 'core/_icon.html' with name='back' %} Return</a>
@@ -27,9 +28,9 @@
   {% else %}
   <div class="pipeline">
     {% for s in pipeline %}
-    <div class="pl-step {% if forloop.counter0 < order.status_index %}done{% elif forloop.counter0 == order.status_index %}current{% endif %}">
+    <div class="pl-step {% if forloop.counter0 < step_index %}done{% elif forloop.counter0 == step_index %}current{% endif %}">
       <div class="node">
-        {% if forloop.counter0 < order.status_index %}{% include 'core/_icon.html' with name='check' %}{% endif %}
+        {% if forloop.counter0 < step_index %}{% include 'core/_icon.html' with name='check' %}{% endif %}
       </div>
       <div class="lbl">{{ s.label }}</div>
     </div>
@@ -111,6 +112,17 @@
         <button name="action" value="start" class="btn btn-dark">Start Processing</button>
         {% elif proc_flow and not order.invoice %}
         <p class="small muted" style="margin:0 0 10px">Adjust the lines above, then create the invoice to finalise this order.</p>
+        <div style="margin:0 0 12px">
+          <label class="small muted" style="display:block;margin-bottom:5px;font-weight:700">Tax</label>
+          <label style="margin-right:16px;cursor:pointer">
+            <input type="radio" name="tax_mode" value="GST" {% if order.tax_mode != 'NON' %}checked{% endif %}>
+            GST ({{ site.tax_percent|floatformat:"-1" }}%)
+          </label>
+          <label style="cursor:pointer">
+            <input type="radio" name="tax_mode" value="NON" {% if order.tax_mode == 'NON' %}checked{% endif %}>
+            Non (exempt)
+          </label>
+        </div>
         <button name="action" value="create_invoice" class="btn btn-primary"
           onclick="return confirm('Create the invoice for this order and mark it Ready for Dispatch?');">
           {% include 'core/_icon.html' with name='file' %} Create Invoice &amp; Mark Ready</button>
@@ -136,6 +148,29 @@
         </dl>
       </div>
       {% endif %}
+    {% endif %}
+
+    {% if order.returns.all or order.invoice or order.status == 'dispatched' or order.status == 'delivered' or order.status == 'completed' %}
+    {% if user.is_processing or user.is_admin_role or user.is_sales %}
+    <div class="card card-pad" style="border:2px solid var(--line)">
+      <div class="flex" style="justify-content:space-between;align-items:center">
+        <h3 style="margin:0">Returns</h3>
+        <a href="{% url 'return_create' %}?order={{ order.pk }}" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='plus' %} Record return</a>
+      </div>
+      {% if order.returns.all %}
+      <hr class="sep" style="margin:12px 0">
+      <dl class="kv">
+        {% for r in order.returns.all %}
+        <dt><a href="{% url 'return_detail' r.pk %}">{{ r.rma_no }}</a></dt>
+        <dd>{{ r.get_status_display }} · {{ r.get_reason_display }}</dd>
+        {% endfor %}
+      </dl>
+      <a href="{% url 'order_invoice' order.pk %}?revised=1" class="btn btn-primary btn-sm btn-block" style="margin-top:10px">{% include 'core/_icon.html' with name='file' %} Revised invoice (after returns)</a>
+      {% else %}
+      <p class="small muted" style="margin:10px 0 0">No returns on this order yet.</p>
+      {% endif %}
+    </div>
+    {% endif %}
     {% endif %}
   </div>
 

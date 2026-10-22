@@ -3,12 +3,17 @@
 {% block title %}{{ ret.rma_no }}{% endblock %}
 {% block page_title %}Return {{ ret.rma_no }}{% endblock %}
 {% block topbar_actions %}
+  <a href="{% url 'order_invoice' ret.order.pk %}" class="btn btn-ghost">{% include 'core/_icon.html' with name='file' %} Original Invoice</a>
+  {% if ret.status == 'completed' %}
+  <a href="{% url 'order_invoice' ret.order.pk %}?revised=1" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Revised Invoice</a>
+  {% endif %}
   <a href="{% url 'return_credit_note' ret.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='file' %} Credit Note</a>
   {% if ret.status == 'open' %}
+  <a href="{% url 'return_edit' ret.pk %}" class="btn btn-ghost">{% include 'core/_icon.html' with name='edit' %} Edit</a>
   <form method="post" action="{% url 'return_process' ret.pk %}" style="display:inline"
         onsubmit="return confirm('Process this return? Good units go back to stock; damaged units are written off. This cannot be undone.');">
     {% csrf_token %}
-    <button class="btn btn-primary">{% include 'core/_icon.html' with name='check' %} Process Return</button>
+    <button class="btn btn-primary">{% include 'core/_icon.html' with name='check' %} Process &amp; Regenerate Invoice</button>
   </form>
   {% endif %}
 {% endblock %}

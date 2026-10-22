@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize static %}
 {% block title %}Invoice {{ inv_number }}{% endblock %}
 {% block extra_css %}
 <style>
@@ -58,14 +58,16 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 {% endblock %}
 {% block page_title %}Invoice{% endblock %}
 {% block topbar_actions %}
-<a href="{% url 'order_invoice_pdf' order.pk %}" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
+<a href="{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
 <button onclick="window.print()" class="btn btn-dark">{% include 'core/_icon.html' with name='print' %} Print</button>
 {% endblock %}
 
 {% block content %}
 <div class="doc-toolbar">
   <a href="{% url 'order_detail' order.pk %}" class="btn btn-ghost btn-sm">Back to order</a>
-  <a href="{% url 'order_invoice_pdf' order.pk %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
+  {% if revised %}<a href="{% url 'order_invoice' order.pk %}" class="btn btn-ghost btn-sm">Original invoice</a>
+  {% elif order.returns.exists %}<a href="{% url 'order_invoice' order.pk %}?revised=1" class="btn btn-ghost btn-sm">Revised (after returns)</a>{% endif %}
+  <a href="{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
   <button onclick="window.print()" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='print' %} Print / Save as PDF</button>
 </div>
 
@@ -73,6 +75,7 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   <!-- Header -->
   <div class="doc-head">
     <div class="co">
+      <img src="{% static 'img/brand-mark.png' %}?v=20261022" alt="" style="height:52px;width:auto;margin-bottom:10px;display:block">
       <div class="tag">{{ site.tagline }}</div>
       <h1>{{ site.company_name }}</h1>
       <div class="info">
@@ -82,8 +85,9 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
       </div>
     </div>
     <div class="meta">
-      <div class="title">Invoice</div>
+      <div class="title">{% if revised %}Revised Invoice{% else %}Invoice{% endif %}</div>
       <div class="dno">{{ inv_number }}</div>
+      {% if revised %}<div style="font-size:.72rem;color:var(--ac);font-weight:700;margin-top:2px">Adjusted after returns</div>{% endif %}
       <table>
         <tr><td>Date:</td><td><b>{{ inv_date|date:"d M Y" }}</b></td></tr>
         <tr><td>Due:</td><td><b>{{ due_date|date:"d M Y" }}</b></td></tr>
@@ -134,7 +138,7 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
       </tr>
     </thead>
     <tbody>
-      {% for i in order.items.all %}
+      {% for i in inv_items %}
       <tr>
         <td>{{ i.product_name }}{% if i.note %}<br><span style="color:#6b6577;font-size:.85em">{{ i.note }}</span>{% endif %}</td>
         <td>{{ i.sku }}</td>
@@ -149,15 +153,17 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 
   <!-- Totals -->
   <table class="totals">
-    <tr><td>Subtotal</td><td class="num">{{ site.currency_symbol }}{{ order.subtotal|floatformat:2|intcomma }}</td></tr>
+    <tr><td>Subtotal</td><td class="num">{{ site.currency_symbol }}{{ subtotal|floatformat:2|intcomma }}</td></tr>
     {% if order.discount_percent %}
     <tr><td>Discount ({{ order.discount_percent|floatformat:0 }}%)</td>
-        <td class="num">−{{ site.currency_symbol }}{{ order.discount_amount|floatformat:2|intcomma }}</td></tr>
+        <td class="num">−{{ site.currency_symbol }}{{ discount_amount|floatformat:2|intcomma }}</td></tr>
     <tr><td>Net</td><td class="num">{{ site.currency_symbol }}{{ net|floatformat:2|intcomma }}</td></tr>
     {% endif %}
-    {% if site.tax_enabled and site.tax_percent %}
-    <tr><td>{{ site.tax_label }} ({{ site.tax_percent|floatformat:0 }}%)</td>
+    {% if tax_is_gst %}
+    <tr><td>{{ tax_label }} ({{ tax_rate|floatformat:"-1" }}%)</td>
         <td class="num">{{ site.currency_symbol }}{{ tax_amount|floatformat:2|intcomma }}</td></tr>
+    {% else %}
+    <tr><td>Tax</td><td class="num">Non — exempt</td></tr>
     {% endif %}
     <tr class="grand"><td>Total ({{ site.currency_code }})</td>
         <td class="num">{{ site.currency_symbol }}{{ grand_total|floatformat:2|intcomma }}</td></tr>
@@ -193,7 +199,7 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   </div>
 
   <div class="doc-note">
-    {% if site.tax_enabled and site.tax_percent %}Line prices are before {{ site.tax_label }}; the total shown includes {{ site.tax_label }}.{% else %}Prices are exclusive of tax.{% endif %}
+    {% if tax_is_gst %}Line prices are before {{ tax_label }}; the total shown includes {{ tax_label }}.{% else %}This is a non-taxable (GST-exempt) invoice.{% endif %}
     Thank you for your business — {{ site.company_name }}.
   </div>
 </div>

@@ -21,8 +21,9 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("order_no", "customer", "salesperson", "status", "total", "created_at")
-    list_filter = ("status", "created_at")
+    list_display = ("order_no", "customer", "salesperson", "status", "tax_mode", "total", "created_at")
+    list_filter = ("status", "tax_mode", "created_at")
+    list_editable = ("tax_mode",)
     search_fields = ("order_no", "customer__name", "customer__company_name")
     inlines = [OrderItemInline, StatusLogInline]
 

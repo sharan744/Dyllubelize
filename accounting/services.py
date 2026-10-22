@@ -157,8 +157,12 @@ def invoice_from_order(order, user=None, tax_percent=None, terms_days=30, post=T
     if hasattr(order, "invoice") and order.invoice:
         return order.invoice
     if tax_percent is None:
-        site = SiteSetting.get()
-        tax_percent = site.tax_percent if getattr(site, "tax_enabled", False) else Decimal("0")
+        # Honour the order's own GST / Non choice.
+        if getattr(order, "tax_mode", "GST") == "NON":
+            tax_percent = Decimal("0")
+        else:
+            site = SiteSetting.get()
+            tax_percent = site.tax_percent if getattr(site, "tax_enabled", False) else Decimal("0")
     inv = Invoice.objects.create(
         customer=order.customer, order=order, date=timezone.localdate(),
         terms_days=terms_days, tax_percent=tax_percent or 0,

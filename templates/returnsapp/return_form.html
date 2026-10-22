@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load humanize %}
-{% block title %}New Return{% endblock %}
-{% block page_title %}New Return — {{ order.order_no }}{% endblock %}
+{% block title %}{% if editing %}Edit Return{% else %}New Return{% endif %}{% endblock %}
+{% block page_title %}{% if editing %}Edit Return {{ ret.rma_no }}{% else %}New Return — {{ order.order_no }}{% endif %}{% endblock %}
 {% block subheading %}<div class="sub">Enter how many units come back <b>good</b> (restock) vs <b>damaged</b> (write-off) for each item.</div>{% endblock %}
 {% block content %}
-<a href="{% url 'return_create' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Choose a different order</a>
+{% if editing %}<a href="{% url 'return_detail' ret.pk %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to return</a>
+{% else %}<a href="{% url 'return_create' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Choose a different order</a>{% endif %}
 
 <form method="post" enctype="multipart/form-data">{% csrf_token %}
 <div class="detail-grid">
@@ -16,13 +17,13 @@
         <table class="tbl">
           <thead><tr><th>Product</th><th class="num">Ordered</th><th class="num" style="width:110px">Good</th><th class="num" style="width:110px">Damaged</th><th>Line note</th></tr></thead>
           <tbody>
-            {% for i in order.items.all %}
+            {% for i in prefilled_items|default:order.items.all %}
             <tr>
               <td><b>{{ i.product_name }}</b><div class="mono small muted">{{ i.sku }} · {{ i.unit }}</div></td>
               <td class="num">{{ i.quantity|floatformat:0 }}</td>
-              <td class="num"><input type="number" name="good_{{ i.id }}" min="0" max="{{ i.quantity|floatformat:0 }}" step="1" value="0" style="width:90px;text-align:right"></td>
-              <td class="num"><input type="number" name="damaged_{{ i.id }}" min="0" max="{{ i.quantity|floatformat:0 }}" step="1" value="0" style="width:90px;text-align:right"></td>
-              <td><input type="text" name="note_{{ i.id }}" placeholder="e.g. rotten, crushed…"></td>
+              <td class="num"><input type="number" name="good_{{ i.id }}" min="0" max="{{ i.quantity|floatformat:0 }}" step="1" value="{{ i.ret_good|default:'0' }}" style="width:90px;text-align:right"></td>
+              <td class="num"><input type="number" name="damaged_{{ i.id }}" min="0" max="{{ i.quantity|floatformat:0 }}" step="1" value="{{ i.ret_damaged|default:'0' }}" style="width:90px;text-align:right"></td>
+              <td><input type="text" name="note_{{ i.id }}" value="{{ i.ret_note|default:'' }}" placeholder="e.g. rotten, crushed…"></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -42,24 +43,24 @@
     <div class="field">
       <label for="reason">Reason</label>
       <select name="reason" id="reason">
-        <option value="damaged">Damaged in transit</option>
-        <option value="expired">Expired / spoiled (rotten)</option>
-        <option value="wrong_item">Wrong item delivered</option>
-        <option value="short">Short / over shipped</option>
-        <option value="not_needed">No longer needed</option>
-        <option value="other">Other</option>
+        <option value="damaged" {% if reason_sel == 'damaged' %}selected{% endif %}>Damaged in transit</option>
+        <option value="expired" {% if reason_sel == 'expired' %}selected{% endif %}>Expired / spoiled (rotten)</option>
+        <option value="wrong_item" {% if reason_sel == 'wrong_item' %}selected{% endif %}>Wrong item delivered</option>
+        <option value="short" {% if reason_sel == 'short' %}selected{% endif %}>Short / over shipped</option>
+        <option value="not_needed" {% if reason_sel == 'not_needed' %}selected{% endif %}>No longer needed</option>
+        <option value="other" {% if reason_sel == 'other' %}selected{% endif %}>Other</option>
       </select>
     </div>
     <div class="field">
       <label for="reason_note">Reason note</label>
-      <input type="text" name="reason_note" id="reason_note" placeholder="Short description">
+      <input type="text" name="reason_note" id="reason_note" value="{{ ret.reason_note|default:'' }}" placeholder="Short description">
     </div>
     <div class="field">
       <label for="notes">Internal notes</label>
-      <textarea name="notes" id="notes" rows="3"></textarea>
+      <textarea name="notes" id="notes" rows="3">{{ ret.notes|default:'' }}</textarea>
     </div>
     <div class="form-actions">
-      <button class="btn btn-primary btn-block">Create Return</button>
+      <button class="btn btn-primary btn-block">{% if editing %}Save changes{% else %}Create Return{% endif %}</button>
     </div>
     <p class="small muted" style="margin-top:10px">Stock is updated when you <b>process</b> the return on the next screen.</p>
   </div>

@@ -16,6 +16,34 @@ from .forms import CustomerForm
 from .models import Customer, Order, OrderItem, OrderStatus
 
 
+def brand_logo_flowable(height_mm=16):
+    """Return a reportlab Image of the company logo for PDF headers, or None.
+    Resolves the static file in both dev (finders) and production (STATIC_ROOT)."""
+    try:
+        import os
+        from django.conf import settings
+        from django.contrib.staticfiles import finders
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Image as RLImage
+        from reportlab.lib.utils import ImageReader
+
+        path = finders.find("img/brand-mark-white.png")
+        if not path and getattr(settings, "STATIC_ROOT", None):
+            cand = os.path.join(str(settings.STATIC_ROOT), "img", "brand-mark-white.png")
+            if os.path.exists(cand):
+                path = cand
+        if not path or not os.path.exists(path):
+            return None
+        iw, ih = ImageReader(path).getSize()
+        h = height_mm * mm
+        w = h * (iw / ih)
+        img = RLImage(path, width=w, height=h)
+        img.hAlign = "LEFT"
+        return img
+    except Exception:
+        return None
+
+
 # ============================================================
 # Customers
 # ============================================================
@@ -330,22 +358,65 @@ def order_quotation(request, pk):
 # ============================================================
 # Order invoice — printable view + PDF download
 # ============================================================
-def _invoice_context(order):
+def _invoice_context(order, revised=False):
     """Build the figures + meta for an order's invoice. If a formal accounting
     Invoice exists for the order, its number / date / due / paid / balance are
-    used; otherwise the invoice is drawn straight from the order."""
+    used; otherwise the invoice is drawn straight from the order.
+
+    When revised=True, the line quantities are reduced by whatever has been
+    returned (processed returns) so the document shows the corrected amounts
+    the customer actually owes after the return."""
     from decimal import Decimal
     from core.models import SiteSetting
     site = SiteSetting.get()
 
-    net = order.total  # subtotal minus order discount
-    if site.tax_enabled and site.tax_percent:
-        tax_amount = (net * site.tax_percent / Decimal("100")).quantize(Decimal("0.01"))
-    else:
-        tax_amount = Decimal("0.00")
-    grand_total = net + tax_amount
+    # Quantities returned so far, by product (processed returns only).
+    returned = {}
+    if revised:
+        try:
+            from returnsapp.models import Return
+            rqs = Return.objects.filter(order=order, status=Return.Status.COMPLETED)
+            for r in rqs.prefetch_related("lines"):
+                for l in r.lines.all():
+                    if l.product_id:
+                        returned[l.product_id] = returned.get(l.product_id, Decimal("0")) + l.quantity
+        except Exception:
+            returned = {}
 
+    # Build the line list the document renders (net of returns when revised).
+    inv_items = []
+    subtotal = Decimal("0.00")
+    for i in order.items.all():
+        qty = i.quantity
+        if revised and i.product_id in returned and returned[i.product_id] > 0:
+            take = min(qty, returned[i.product_id])
+            qty = qty - take
+            returned[i.product_id] -= take
+        if revised and qty <= 0:
+            continue  # fully returned line — drop it
+        line_total = (i.unit_price * qty).quantize(Decimal("0.01"))
+        subtotal += line_total
+        inv_items.append({
+            "product_name": i.product_name, "note": i.note, "sku": i.sku,
+            "unit": i.unit, "unit_price": i.unit_price,
+            "quantity": qty, "line_total": line_total,
+        })
+
+    discount_amount = (subtotal * order.discount_percent / Decimal("100")).quantize(Decimal("0.01"))
+    net = (subtotal - discount_amount).quantize(Decimal("0.01"))
     inv = getattr(order, "invoice", None)
+    # Effective tax rate: a posted invoice keeps the rate it was raised at;
+    # otherwise it follows the order's GST / Non choice.
+    if inv is not None:
+        tax_rate = inv.tax_percent or Decimal("0")
+    elif order.tax_mode == "NON":
+        tax_rate = Decimal("0")
+    elif site.tax_enabled and site.tax_percent:
+        tax_rate = site.tax_percent
+    else:
+        tax_rate = Decimal("0")
+    tax_amount = (net * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+    grand_total = net + tax_amount
     if inv is not None:
         number = inv.number
         inv_date = inv.date
@@ -379,9 +450,16 @@ def _invoice_context(order):
     checked_by = order.confirmed_by.display_name if getattr(order, "confirmed_by", None) else ""
     packed_by = ""  # filled in by hand on the printed copy
 
+    tax_label = site.tax_label or "GST"
+    tax_is_gst = tax_rate > 0
+    if revised:
+        number = f"{number}-R"
     return {
         "order": order, "site": site,
+        "inv_items": inv_items, "subtotal": subtotal, "discount_amount": discount_amount,
+        "revised": revised,
         "net": net, "tax_amount": tax_amount, "grand_total": grand_total,
+        "tax_rate": tax_rate, "tax_label": tax_label, "tax_is_gst": tax_is_gst,
         "inv_number": number, "inv_date": inv_date, "due_date": due_date,
         "amount_paid": amount_paid, "balance": balance,
         "inv_status": status, "inv_status_code": status_code,
@@ -398,7 +476,8 @@ def order_invoice(request, pk):
         Order.objects.select_related("customer", "salesperson").prefetch_related("items"),
         pk=pk,
     )
-    return render(request, "orders/invoice.html", _invoice_context(order))
+    revised = request.GET.get("revised") == "1"
+    return render(request, "orders/invoice.html", _invoice_context(order, revised=revised))
 
 
 @role_required(*ALL_STAFF)
@@ -420,7 +499,8 @@ def order_invoice_pdf(request, pk):
         Order.objects.select_related("customer", "salesperson").prefetch_related("items"),
         pk=pk,
     )
-    ctx = _invoice_context(order)
+    revised = request.GET.get("revised") == "1"
+    ctx = _invoice_context(order, revised=revised)
     pdf_bytes = _render_invoice_pdf(ctx)
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="Invoice-{ctx["inv_number"]}.pdf"'
@@ -477,7 +557,11 @@ def _render_invoice_pdf(ctx):
     story = []
 
     # ---- Header: company (left) + invoice meta (right) ----
-    co_lines = [Paragraph(site.tagline or "", tag), Paragraph(site.company_name or "", h_co)]
+    co_lines = []
+    _logo = brand_logo_flowable(16)
+    if _logo is not None:
+        co_lines += [_logo, Spacer(1, 6)]
+    co_lines += [Paragraph(site.tagline or "", tag), Paragraph(site.company_name or "", h_co)]
     info = []
     if site.address:
         info.append(site.address.replace("\n", "<br/>"))
@@ -495,7 +579,7 @@ def _render_invoice_pdf(ctx):
     co_cell = co_lines
 
     meta_tbl = Table([
-        [Paragraph("INVOICE", titleR)],
+        [Paragraph("REVISED INVOICE" if ctx.get("revised") else "INVOICE", titleR)],
         [Paragraph(ctx["inv_number"], dnoR)],
         [Paragraph(
             f"Date: <b>{ctx['inv_date']:%d %b %Y}</b><br/>"
@@ -562,13 +646,13 @@ def _render_invoice_pdf(ctx):
     rows = [[Paragraph("<b>Product</b>", cellL), Paragraph("<b>SKU</b>", cellL),
              Paragraph("<b>Unit price</b>", cellR), Paragraph("<b>Qty</b>", cellR),
              Paragraph("<b>Amount</b>", cellR)]]
-    for i in order.items.all():
+    for i in ctx["inv_items"]:
         rows.append([
-            Paragraph(i.product_name, cellL),
-            Paragraph(i.sku or "", cellL),
-            Paragraph(money(i.unit_price), cellR),
-            Paragraph(f"{i.quantity:.0f}", cellR),
-            Paragraph(money(i.line_total), cellR),
+            Paragraph(i["product_name"], cellL),
+            Paragraph(i["sku"] or "", cellL),
+            Paragraph(money(i["unit_price"]), cellR),
+            Paragraph(f"{i['quantity']:.0f}", cellR),
+            Paragraph(money(i["line_total"]), cellR),
         ])
     items = Table(rows, colWidths=[72 * mm, 28 * mm, 26 * mm, 16 * mm, 26 * mm], repeatRows=1)
     items.setStyle(TableStyle([
@@ -583,20 +667,24 @@ def _render_invoice_pdf(ctx):
     story += [items, Spacer(1, 8)]
 
     # ---- Totals ----
-    trows = [["Subtotal", money(order.subtotal)]]
+    trows = [["Subtotal", money(ctx["subtotal"])]]
     if order.discount_percent:
-        trows.append([f"Discount ({order.discount_percent:.0f}%)", "-" + money(order.discount_amount)])
+        trows.append([f"Discount ({order.discount_percent:.0f}%)", "-" + money(ctx["discount_amount"])])
         trows.append(["Net", money(ctx["net"])])
-    if site.tax_enabled and site.tax_percent:
-        trows.append([f"{site.tax_label} ({site.tax_percent:.0f}%)", money(ctx["tax_amount"])])
+    if ctx["tax_is_gst"]:
+        rate = ctx["tax_rate"]
+        rate_txt = (f"{rate:.2f}".rstrip("0").rstrip("."))
+        trows.append([f"{ctx['tax_label']} ({rate_txt}%)", money(ctx["tax_amount"])])
+    else:
+        trows.append(["Tax", "Non — exempt"])
+    grand_row = len(trows)  # the Total row we are about to append
     trows.append([f"Total ({site.currency_code})", money(ctx["grand_total"])])
     if ctx["has_invoice"]:
         trows.append(["Paid", money(ctx["amount_paid"])])
         trows.append(["Balance due", money(ctx["balance"])])
-    tdata = [[Paragraph(a, cellL if idx != len(trows) - 1 else bodyb),
+    tdata = [[Paragraph(a, cellL if idx != grand_row else bodyb),
               Paragraph(b, cellR)] for idx, (a, b) in enumerate(trows)]
     totals = Table(tdata, colWidths=[44 * mm, 36 * mm], hAlign="RIGHT")
-    grand_row = 2 + (2 if order.discount_percent else 0) + (1 if (site.tax_enabled and site.tax_percent) else 0) - 1
     totals.setStyle(TableStyle([
         ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("LINEABOVE", (0, grand_row), (-1, grand_row), 1.2, DARK),
@@ -616,8 +704,8 @@ def _render_invoice_pdf(ctx):
     if inotes.strip():
         story += [Paragraph(inotes.replace("\n", "<br/>"), body), Spacer(1, 8)]
 
-    note = ("Prices are before " + (site.tax_label or "tax") + "; the total includes " + (site.tax_label or "tax") + "."
-            if (site.tax_enabled and site.tax_percent) else "Prices are exclusive of tax.")
+    note = ("Prices are before " + ctx["tax_label"] + "; the total includes " + ctx["tax_label"] + "."
+            if ctx["tax_is_gst"] else "This is a non-taxable (GST-exempt) invoice.")
     story += [Spacer(1, 10), Paragraph(note + f"  Thank you for your business — {site.company_name}.",
                                        ParagraphStyle("foot", parent=small, alignment=1))]
 
@@ -880,6 +968,11 @@ def processing_action(request, pk):
         else:
             try:
                 from accounting import services as _acc
+                # GST / Non choice made on the Processing card.
+                tax_mode = request.POST.get("tax_mode")
+                if tax_mode in ("GST", "NON"):
+                    order.tax_mode = tax_mode
+                    order.save(update_fields=["tax_mode"])
                 inv = _acc.invoice_from_order(order, user=request.user)
                 # Simple flow has no dispatch/delivery — the order is done once invoiced.
                 order.set_status(OrderStatus.COMPLETED, user=request.user,

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize static %}
 {% block title %}Quotation {{ order.order_no }}{% endblock %}
 {% block extra_css %}
 <style>
@@ -97,6 +97,7 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
   <!-- Header -->
   <div class="doc-head">
     <div class="co">
+      <img src="{% static 'img/brand-mark.png' %}?v=20261022" alt="" style="height:52px;width:auto;margin-bottom:10px;display:block">
       <div class="tag">{{ site.tagline }}</div>
       <h1>{{ site.company_name }}</h1>
       <div class="info">

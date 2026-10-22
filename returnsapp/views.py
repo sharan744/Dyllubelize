@@ -8,8 +8,10 @@ from core.permissions import role_required
 from orders.models import Order, OrderStatus
 from .models import Return, ReturnLine, ReturnPhoto
 
-# Warehouse-facing roles (admin always allowed)
-RETURN_ROLES = (Role.DISPATCH, Role.DELIVERY)
+# Who can handle returns (admin always allowed). Processing & Sales are
+# included so returns work in the simple flow, where dispatch/delivery roles
+# aren't used.
+RETURN_ROLES = (Role.PROCESSING, Role.SALES, Role.DISPATCH, Role.DELIVERY)
 
 
 def _dec(value):
@@ -84,6 +86,66 @@ def return_create(request):
 
 
 @role_required(*RETURN_ROLES)
+def return_edit(request, pk):
+    """Edit an OPEN return — change quantities, reason and notes, then save.
+    Processed returns are locked (their stock movements have already posted)."""
+    ret = get_object_or_404(
+        Return.objects.select_related("order__customer").prefetch_related("lines"), pk=pk)
+    order = ret.order
+    if ret.status != Return.Status.OPEN:
+        messages.error(request, f"{ret.rma_no} is already processed and can't be edited.")
+        return redirect("return_detail", pk=pk)
+
+    if request.method == "POST":
+        ret.reason = request.POST.get("reason", ret.reason)
+        ret.reason_note = request.POST.get("reason_note", "")[:255]
+        ret.notes = request.POST.get("notes", "")
+        ret.save(update_fields=["reason", "reason_note", "notes"])
+        ret.lines.all().delete()
+        any_line = False
+        for it in order.items.select_related("product"):
+            good = _dec(request.POST.get(f"good_{it.id}"))
+            damaged = _dec(request.POST.get(f"damaged_{it.id}"))
+            cap = it.quantity
+            if good + damaged > cap:
+                overflow = good + damaged - cap
+                damaged = max(Decimal("0"), damaged - overflow)
+                overflow = good + damaged - cap
+                good = max(Decimal("0"), good - overflow)
+            if good + damaged > 0:
+                ReturnLine.objects.create(
+                    ret=ret, product=it.product, product_name=it.product_name,
+                    sku=it.sku, unit=it.unit, unit_price=it.unit_price,
+                    good_qty=good, damaged_qty=damaged,
+                    note=request.POST.get(f"note_{it.id}", "")[:255],
+                )
+                any_line = True
+        for f in request.FILES.getlist("photos"):
+            ReturnPhoto.objects.create(ret=ret, image=f)
+        if not any_line:
+            messages.error(request, "Enter a good or damaged quantity for at least one item.")
+            return redirect("return_edit", pk=ret.pk)
+        messages.success(request, f"{ret.rma_no} updated.")
+        return redirect("return_detail", pk=ret.pk)
+
+    # GET — prefill each order line with the return's existing quantities.
+    existing = {}
+    for l in ret.lines.all():
+        existing[l.product_id] = l
+    items = list(order.items.select_related("product"))
+    for it in items:
+        l = existing.get(it.product_id)
+        it.ret_good = f"{l.good_qty:.0f}" if l else "0"
+        it.ret_damaged = f"{l.damaged_qty:.0f}" if l else "0"
+        it.ret_note = l.note if l else ""
+    order._prefilled_items = items
+    return render(request, "returnsapp/return_form.html", {
+        "order": order, "editing": True, "ret": ret,
+        "reason_sel": ret.reason, "prefilled_items": items,
+    })
+
+
+@role_required(*RETURN_ROLES)
 def return_detail(request, pk):
     ret = get_object_or_404(
         Return.objects.select_related("order__customer", "created_by", "processed_by")
@@ -111,7 +173,10 @@ def _credit_note_context(ret):
     site = SiteSetting.get()
     order = ret.order
     net = ret.total_value
-    if site.tax_enabled and site.tax_percent:
+    # Mirror the order's GST / Non choice so the credit matches the invoice.
+    if getattr(order, "tax_mode", "GST") == "NON":
+        tax_amount = Decimal("0.00")
+    elif site.tax_enabled and site.tax_percent:
         tax_amount = (net * site.tax_percent / Decimal("100")).quantize(Decimal("0.01"))
     else:
         tax_amount = Decimal("0.00")
@@ -196,7 +261,12 @@ def _render_credit_note_pdf(ctx):
     cellL = ParagraphStyle("cellL", parent=ss["Normal"], fontSize=9, leading=12)
 
     story = []
-    co_cell = [Paragraph(site.tagline or "", tag), Paragraph(site.company_name or "", h_co)]
+    from orders.views import brand_logo_flowable
+    co_cell = []
+    _logo = brand_logo_flowable(16)
+    if _logo is not None:
+        co_cell += [_logo, Spacer(1, 6)]
+    co_cell += [Paragraph(site.tagline or "", tag), Paragraph(site.company_name or "", h_co)]
     info = []
     if site.address:
         info.append(site.address.replace("\n", "<br/>"))
