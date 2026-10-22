@@ -28,7 +28,7 @@
 <div class="prod-grid">
   {% for p in products %}
   <a class="prod" href="{% url 'product_detail' p.pk %}" style="text-decoration:none;color:inherit">
-    <div class="thumb" style="aspect-ratio:1/1;background:#fff;display:grid;place-items:center;overflow:hidden;padding:10px;position:relative">
+    <div class="thumb" style="aspect-ratio:4/5;background:#fff;display:grid;place-items:center;overflow:hidden;padding:10px;position:relative">
       {% if p.image %}<img src="{{ p.image.url }}" alt="{{ p.name }}"
             style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block">
       {% else %}{% include 'core/_icon.html' with name='box' %}{% endif %}
