@@ -133,7 +133,7 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   <table class="doc-tbl">
     <thead>
       <tr>
-        <th style="width:40%">Product</th><th>SKU</th><th>Unit</th>
+        <th style="width:55%">Product</th>
         <th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Amount</th>
       </tr>
     </thead>
@@ -141,8 +141,6 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
       {% for i in inv_items %}
       <tr>
         <td>{{ i.product_name }}{% if i.note %}<br><span style="color:#6b6577;font-size:.85em">{{ i.note }}</span>{% endif %}</td>
-        <td>{{ i.sku }}</td>
-        <td>{{ i.unit }}</td>
         <td class="num">{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}</td>
         <td class="num">{{ i.quantity|floatformat:0 }}</td>
         <td class="num">{{ site.currency_symbol }}{{ i.line_total|floatformat:2|intcomma }}</td>

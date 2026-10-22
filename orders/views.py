@@ -643,18 +643,17 @@ def _render_invoice_pdf(ctx):
     story += [signoffs, Spacer(1, 12)]
 
     # ---- Line items ----
-    rows = [[Paragraph("<b>Product</b>", cellL), Paragraph("<b>SKU</b>", cellL),
+    rows = [[Paragraph("<b>Product</b>", cellL),
              Paragraph("<b>Unit price</b>", cellR), Paragraph("<b>Qty</b>", cellR),
              Paragraph("<b>Amount</b>", cellR)]]
     for i in ctx["inv_items"]:
         rows.append([
             Paragraph(i["product_name"], cellL),
-            Paragraph(i["sku"] or "", cellL),
             Paragraph(money(i["unit_price"]), cellR),
             Paragraph(f"{i['quantity']:.0f}", cellR),
             Paragraph(money(i["line_total"]), cellR),
         ])
-    items = Table(rows, colWidths=[72 * mm, 28 * mm, 26 * mm, 16 * mm, 26 * mm], repeatRows=1)
+    items = Table(rows, colWidths=[100 * mm, 30 * mm, 16 * mm, 26 * mm], repeatRows=1)
     items.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
