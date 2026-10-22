@@ -95,6 +95,14 @@ class SiteSetting(models.Model):
         help_text="A closing message shown at the bottom of every invoice.",
     )
 
+    # Order flow
+    processing_invoice_flow = models.BooleanField(
+        "Processing creates the invoice", default=False,
+        help_text="When ON, the processing team can edit quantities/prices, remove "
+                  "out-of-stock lines and create the invoice during Processing. "
+                  "When OFF, the invoice is raised automatically on delivery (old flow).",
+    )
+
     class Meta:
         verbose_name = "Site Setting"
         verbose_name_plural = "Site Settings"

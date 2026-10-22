@@ -43,30 +43,38 @@
   <div>
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>Items</h3><div class="spacer"></div>
+        {% if proc_edit %}<span class="chip" style="background:var(--s-proc,#6c5ce7);color:#fff">Processing — editable</span>{% endif %}
         <span class="chip">{{ order.distinct_items }} line(s) · {{ order.total_items|floatformat:0 }} units</span></div>
+      {% if proc_edit %}<div class="sub small muted" style="padding:0 14px 8px">Edit a <b>Qty</b> or <b>Unit Price</b> (you can type a calc like <b>12*4</b>), or remove an out-of-stock line, then create the invoice below.</div>{% endif %}
       <div class="table-wrap">
-        <table class="tbl">
-          <thead><tr><th>Product</th><th>SKU</th><th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Total</th></tr></thead>
+        <table class="tbl" id="proc-table">
+          <thead><tr><th>Product</th><th>SKU</th><th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Total</th>{% if proc_edit %}<th></th>{% endif %}</tr></thead>
           <tbody>
             {% for i in order.items.all %}
-            <tr>
+            <tr data-row="{{ i.pk }}">
               <td><b>{{ i.product_name }}</b>{% if i.note %}<div class="small muted">{{ i.note }}</div>{% endif %}</td>
               <td><span class="mono">{{ i.sku }}</span></td>
+              {% if proc_edit %}
+              <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}<input class="qb-cell" data-line-id="{{ i.pk }}" data-field="price" value="{{ i.unit_price|floatformat:2 }}" inputmode="decimal" style="width:78px;text-align:right"></td>
+              <td class="num"><input class="qb-cell qb-qty" data-line-id="{{ i.pk }}" data-field="qty" value="{{ i.quantity|floatformat:0 }}" inputmode="decimal" style="width:54px;text-align:right"></td>
+              {% else %}
               <td class="num">{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}</td>
               <td class="num">{{ i.quantity|floatformat:0 }} <span class="muted small">{{ i.unit }}</span></td>
+              {% endif %}
               <td class="num">{{ i.line_discount_percent|floatformat:0 }}%</td>
-              <td class="num"><b>{{ site.currency_symbol }}{{ i.line_total|floatformat:2|intcomma }}</b></td>
+              <td class="num"><b>{{ site.currency_symbol }}<span id="qb-amt-{{ i.pk }}">{{ i.line_total|floatformat:2|intcomma }}</span></b></td>
+              {% if proc_edit %}<td class="num"><button type="button" class="btn btn-ghost btn-sm proc-del" data-line-id="{{ i.pk }}" title="Remove line">&times;</button></td>{% endif %}
             </tr>
             {% endfor %}
           </tbody>
           <tfoot>
-            <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}{{ order.subtotal|floatformat:2|intcomma }}</td></tr>
-            {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}{{ order.discount_amount|floatformat:2|intcomma }}</td></tr>{% endif %}
+            <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}<span id="qb-subtotal">{{ order.subtotal|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>
+            {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}<span id="qb-discount">{{ order.discount_amount|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>{% endif %}
             {% if site.tax_enabled and site.tax_percent %}
-            <tr><td colspan="5" class="num muted">{{ order.tax_label }} ({{ order.tax_percent_effective|floatformat:1 }}%)</td><td class="num">{{ site.currency_symbol }}{{ order.tax_amount|floatformat:2|intcomma }}</td></tr>
-            <tr><td colspan="5" class="num"><b>Total incl. {{ order.tax_label }}</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}{{ order.total_with_tax|floatformat:2|intcomma }}</b></td></tr>
+            <tr><td colspan="5" class="num muted">{{ order.tax_label }} ({{ order.tax_percent_effective|floatformat:1 }}%)</td><td class="num">{{ site.currency_symbol }}<span id="qb-tax">{{ order.tax_amount|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>
+            <tr><td colspan="5" class="num"><b>Total incl. {{ order.tax_label }}</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total_with_tax|floatformat:2|intcomma }}</span></b></td>{% if proc_edit %}<td></td>{% endif %}</tr>
             {% else %}
-            <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}{{ order.total|floatformat:2|intcomma }}</b></td></tr>
+            <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total|floatformat:2|intcomma }}</span></b></td>{% if proc_edit %}<td></td>{% endif %}</tr>
             {% endif %}
           </tfoot>
         </table>
@@ -95,18 +103,24 @@
     </div>
     {% endif %}
 
-    {% if user.is_processing and order.status == 'confirmed' or user.is_processing and order.status == 'processing' %}
+    {% if user.is_processing or user.is_admin_role %}{% if order.status == 'confirmed' or order.status == 'processing' %}
     <div class="card card-pad" style="border:2px solid var(--s-proc)">
       <h3>Processing</h3>
       <form method="post" action="{% url 'processing_action' order.pk %}">{% csrf_token %}
         {% if order.status == 'confirmed' %}
         <button name="action" value="start" class="btn btn-dark">Start Processing</button>
+        {% elif proc_flow and not order.invoice %}
+        <p class="small muted" style="margin:0 0 10px">Adjust the lines above, then create the invoice to finalise this order.</p>
+        <button name="action" value="create_invoice" class="btn btn-primary"
+          onclick="return confirm('Create the invoice for this order and mark it Ready for Dispatch?');">
+          {% include 'core/_icon.html' with name='file' %} Create Invoice &amp; Mark Ready</button>
         {% else %}
+        {% if order.invoice %}<p class="small" style="margin:0 0 10px">Invoice <b>{{ order.invoice.number }}</b> created · <a href="{% url 'order_invoice' order.pk %}">View</a></p>{% endif %}
         <button name="action" value="ready" class="btn btn-primary">Mark Ready for Dispatch</button>
         {% endif %}
       </form>
     </div>
-    {% endif %}
+    {% endif %}{% endif %}
 
     {% if order.status == 'delivered' or order.status == 'completed' %}
       {% if delivery %}
@@ -198,4 +212,52 @@
     {% endif %}
   </div>
 </div>
+
+{% if proc_edit %}
+<script>
+(function(){
+  const UP  = "{% url 'order_line_update' order.pk %}";
+  const RM  = "{% url 'order_line_remove' order.pk %}";
+  const CSRF= "{{ csrf_token }}";
+  function commas(n){ const p=String(n).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
+  function setTxt(id,v){ const e=document.getElementById(id); if(e) e.textContent=commas(v); }
+  function setTotals(d){ setTxt('qb-subtotal',d.subtotal); setTxt('qb-discount',d.discount); setTxt('qb-tax',d.tax); setTxt('qb-grand',d.grand_total); }
+
+  // Inline qty / price editing (server evaluates calcs and is authoritative)
+  document.querySelectorAll('#proc-table .qb-cell').forEach(cell=>{
+    cell.dataset.last=cell.value;
+    cell.addEventListener('focus',()=>cell.select());
+    cell.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();cell.blur();} if(e.key==='Escape'){cell.value=cell.dataset.last;cell.blur();} });
+    cell.addEventListener('blur',()=>commit(cell));
+  });
+  function commit(cell){
+    const raw=cell.value.trim();
+    if(raw===''||raw===cell.dataset.last){ cell.value=cell.dataset.last; return; }
+    fetch(UP,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+      body:new URLSearchParams({line_id:cell.dataset.lineId,field:cell.dataset.field,value:raw}).toString()})
+    .then(r=>r.json().then(d=>({ok:r.ok,d}))).then(({ok,d})=>{
+      if(!ok||!d.ok) throw new Error(d.error||'Could not save.');
+      cell.value=(cell.dataset.field==='qty')?d.qty:d.unit_price; cell.dataset.last=cell.value;
+      const amt=document.getElementById('qb-amt-'+cell.dataset.lineId); if(amt) amt.textContent=commas(d.line_total);
+      setTotals(d); cell.style.background='#eefaf8'; setTimeout(()=>cell.style.background='',700);
+    }).catch(err=>{ cell.value=cell.dataset.last; cell.style.background='#fdecea'; setTimeout(()=>cell.style.background='',1200); alert(err.message); });
+  }
+
+  // Remove a line (out of stock) — returns its stock and updates totals
+  document.querySelectorAll('#proc-table .proc-del').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(!confirm('Remove this line from the order? Its stock is returned to inventory.')) return;
+      fetch(RM,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+        body:new URLSearchParams({line_id:btn.dataset.lineId}).toString()})
+      .then(r=>r.json().then(d=>({ok:r.ok,d}))).then(({ok,d})=>{
+        if(!ok||!d.ok) throw new Error(d.error||'Could not remove.');
+        const row=document.querySelector('#proc-table tr[data-row="'+btn.dataset.lineId+'"]'); if(row) row.remove();
+        setTotals(d);
+        if(d.lines===0) location.reload();
+      }).catch(err=>alert(err.message));
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

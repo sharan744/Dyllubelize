@@ -22,6 +22,9 @@ class SiteSettingAdmin(admin.ModelAdmin):
         ("Quotation", {"fields": ("quote_validity_days", "quote_terms")}),
         ("Invoice", {"fields": ("bank_details", "invoice_notes"),
                      "description": "Bank details and closing note shown on invoices."}),
+        ("Order flow", {"fields": ("processing_invoice_flow",),
+                        "description": "Turn ON to let Processing edit the order and create the "
+                                       "invoice; OFF keeps the old auto-invoice-on-delivery flow."}),
     )
 
     readonly_fields = ("currency_symbol",)

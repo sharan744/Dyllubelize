@@ -233,16 +233,25 @@ def _save_order(request, order=None):
 # ============================================================
 @role_required(*ALL_STAFF)
 def order_detail(request, pk):
+    from core.models import SiteSetting
     order = get_object_or_404(
         Order.objects.select_related("customer", "salesperson"), pk=pk
     )
     from orders.models import STATUS_PIPELINE
     pipeline = [{"key": s.value, "label": s.label} for s in STATUS_PIPELINE]
+    site = SiteSetting.get()
+    # Processing-edit mode: flow enabled + order in Processing + processing/admin user.
+    proc_flow = bool(getattr(site, "processing_invoice_flow", False))
+    proc_edit = (proc_flow and order.status == OrderStatus.PROCESSING
+                 and (request.user.is_processing or request.user.is_admin_role)
+                 and not getattr(order, "invoice", None))
     return render(request, "orders/order_detail.html", {
         "order": order,
         "pipeline": pipeline,
         "logs": order.status_logs.select_related("changed_by"),
         "delivery": getattr(order, "delivery", None),
+        "proc_flow": proc_flow,
+        "proc_edit": proc_edit,
     })
 
 
@@ -618,6 +627,62 @@ def _safe_calc(expr):
     return ev(node)
 
 
+def _can_edit_lines(user, order):
+    """Who may edit an order's lines (qty / price / remove).
+    Salesperson (owner) and admin as before; plus the Processing team while the
+    order is in Processing and the 'processing creates the invoice' flow is on."""
+    from core.models import SiteSetting
+    if not order.is_open:
+        return False
+    if user.is_admin_role or order.salesperson_id == user.id:
+        return True
+    if (getattr(user, "is_processing", False)
+            and order.status == OrderStatus.PROCESSING
+            and SiteSetting.get().processing_invoice_flow
+            and not getattr(order, "invoice", None)):
+        return True
+    return False
+
+
+def _order_totals_json(order):
+    from core.models import SiteSetting
+    from decimal import Decimal as _D
+    site = SiteSetting.get()
+    net = order.total
+    tax = (net * site.tax_percent / _D("100")).quantize(_D("0.01")) \
+        if (site.tax_enabled and site.tax_percent) else _D("0.00")
+    return {
+        "subtotal": f"{order.subtotal:.2f}", "discount": f"{order.discount_amount:.2f}",
+        "net": f"{net:.2f}", "tax": f"{tax:.2f}", "grand_total": f"{(net + tax):.2f}",
+        "lines": order.items.count(),
+    }
+
+
+@role_required(*ALL_STAFF)
+def order_line_remove(request, pk):
+    """Remove one order line (e.g. an out-of-stock item) during processing.
+    Returns the removed item's committed stock to inventory."""
+    order = get_object_or_404(Order, pk=pk)
+    if not _can_edit_lines(request.user, order):
+        return JsonResponse({"ok": False, "error": "You can't edit this order."}, status=403)
+    it = order.items.filter(pk=request.POST.get("line_id")).select_related("product").first()
+    if not it:
+        return JsonResponse({"ok": False, "error": "Line not found."}, status=400)
+    # Return the committed stock for this line (it was deducted when the order was placed).
+    try:
+        if order.stock_committed and it.product_id and it.product.track_stock:
+            from catalogue.models import StockMovement
+            it.product.adjust_stock(
+                it.quantity, StockMovement.Kind.RETURN_IN, order=order, user=request.user,
+                note=f"Order {order.order_no} — line removed in processing")
+    except Exception:
+        pass
+    it.delete()
+    data = {"ok": True}
+    data.update(_order_totals_json(order))
+    return JsonResponse(data)
+
+
 @role_required(*ALL_STAFF)
 def order_line_update(request, pk):
     """AJAX: update one order line's quantity or unit price. The posted value may
@@ -625,10 +690,8 @@ def order_line_update(request, pk):
     recomputed line total and order totals."""
     from core.models import SiteSetting
     order = get_object_or_404(Order, pk=pk)
-    if order.salesperson_id != request.user.id and not request.user.is_admin_role:
+    if not _can_edit_lines(request.user, order):
         return JsonResponse({"ok": False, "error": "You can't edit this order."}, status=403)
-    if not order.is_open:
-        return JsonResponse({"ok": False, "error": "This order can no longer be edited."}, status=400)
 
     field = request.POST.get("field")
     it = order.items.filter(pk=request.POST.get("line_id")).first()
@@ -770,10 +833,31 @@ def processing_action(request, pk):
     order = get_object_or_404(Order, pk=pk)
     if request.method != "POST":
         return redirect("order_detail", pk=pk)
+    from core.models import SiteSetting
     action = request.POST.get("action")
     if action == "start" and order.status == OrderStatus.CONFIRMED:
         order.set_status(OrderStatus.PROCESSING, user=request.user, note="Processing started")
         messages.info(request, f"Order {order.order_no} moved to Processing.")
+    elif action == "create_invoice":
+        # New flow: processing team finalises the order and raises the invoice now.
+        if not SiteSetting.get().processing_invoice_flow:
+            messages.error(request, "Processing invoice flow is not enabled.")
+        elif order.status != OrderStatus.PROCESSING:
+            messages.error(request, "Order must be in Processing to create its invoice.")
+        elif getattr(order, "invoice", None):
+            messages.info(request, "An invoice already exists for this order.")
+        elif not order.items.exists():
+            messages.error(request, "Add at least one line before creating the invoice.")
+        else:
+            try:
+                from accounting import services as _acc
+                inv = _acc.invoice_from_order(order, user=request.user)
+                order.set_status(OrderStatus.READY, user=request.user,
+                                 note=f"Invoice {inv.number} created in processing")
+                messages.success(request, f"Invoice {inv.number} created — order is Ready for Dispatch.")
+            except Exception as e:
+                messages.error(request, f"Could not create invoice: {e}")
+        return redirect("order_detail", pk=pk)
     elif action == "ready":
         order.set_status(OrderStatus.READY, user=request.user, note="Ready for dispatch")
         messages.success(request, f"Order {order.order_no} is Ready for Dispatch.")
