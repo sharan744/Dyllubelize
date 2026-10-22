@@ -62,7 +62,7 @@ def dashboard(request):
     chart_max = max([c["value"] for c in chart] + [1])
 
     # role-specific action items
-    todo = _role_todo(user)
+    todo = _role_todo(user, simple_flow=bool(SiteSetting.get().processing_invoice_flow))
 
     # low-stock (warehouse roles)
     low_stock = []
@@ -84,7 +84,7 @@ def dashboard(request):
     })
 
 
-def _role_todo(user):
+def _role_todo(user, simple_flow=False):
     items = []
     if user.is_team_lead or user.is_admin_role:
         n = Order.objects.filter(
@@ -98,16 +98,17 @@ def _role_todo(user):
         if n:
             items.append({"label": f"{n} confirmed order(s) to process",
                           "url": "processing_queue", "tone": "blue"})
-    if user.is_dispatch or user.is_admin_role:
-        n = Order.objects.filter(status=OrderStatus.READY).count()
-        if n:
-            items.append({"label": f"{n} order(s) ready to dispatch",
-                          "url": "dispatch_create", "tone": "violet"})
-    if user.is_delivery or user.is_admin_role:
-        n = Order.objects.filter(status=OrderStatus.DISPATCHED).count()
-        if n:
-            items.append({"label": f"{n} delivery(ies) to confirm",
-                          "url": "delivery_queue", "tone": "green"})
+    if not simple_flow:
+        if user.is_dispatch or user.is_admin_role:
+            n = Order.objects.filter(status=OrderStatus.READY).count()
+            if n:
+                items.append({"label": f"{n} order(s) ready to dispatch",
+                              "url": "dispatch_create", "tone": "violet"})
+        if user.is_delivery or user.is_admin_role:
+            n = Order.objects.filter(status=OrderStatus.DISPATCHED).count()
+            if n:
+                items.append({"label": f"{n} delivery(ies) to confirm",
+                              "url": "delivery_queue", "tone": "green"})
     return items
 
 

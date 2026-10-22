@@ -18,6 +18,7 @@ urlpatterns = [
     path("<int:pk>/quotation/", views.order_quotation, name="order_quotation"),
     path("<int:pk>/invoice/", views.order_invoice, name="order_invoice"),
     path("<int:pk>/invoice.pdf", views.order_invoice_pdf, name="order_invoice_pdf"),
+    path("<int:pk>/dispatch-note/", views.order_dispatch_note, name="order_dispatch_note"),
     path("<int:pk>/line-update/", views.order_line_update, name="order_line_update"),
     path("<int:pk>/line-remove/", views.order_line_remove, name="order_line_remove"),
     path("<int:pk>/cancel/", views.order_cancel, name="order_cancel"),

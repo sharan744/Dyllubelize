@@ -238,16 +238,34 @@ def order_detail(request, pk):
         Order.objects.select_related("customer", "salesperson"), pk=pk
     )
     from orders.models import STATUS_PIPELINE
-    pipeline = [{"key": s.value, "label": s.label} for s in STATUS_PIPELINE]
     site = SiteSetting.get()
-    # Processing-edit mode: flow enabled + order in Processing + processing/admin user.
     proc_flow = bool(getattr(site, "processing_invoice_flow", False))
+
+    if proc_flow:
+        # Simple flow: no dispatch/delivery — pipeline ends at Processing → Completed.
+        simple = [OrderStatus.DRAFT, OrderStatus.SUBMITTED, OrderStatus.TEAM_LEAD_REVIEW,
+                  OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.COMPLETED]
+        pipeline = [{"key": s.value,
+                     "label": "Invoiced" if s == OrderStatus.COMPLETED else s.label}
+                    for s in simple]
+        keys = [s.value for s in simple]
+        if order.status in (OrderStatus.READY, OrderStatus.DISPATCHED,
+                            OrderStatus.DELIVERED, OrderStatus.COMPLETED):
+            step_index = len(simple) - 1
+        else:
+            step_index = keys.index(order.status) if order.status in keys else 0
+    else:
+        pipeline = [{"key": s.value, "label": s.label} for s in STATUS_PIPELINE]
+        step_index = order.status_index
+
+    # Processing-edit mode: flow enabled + order in Processing + processing/admin user.
     proc_edit = (proc_flow and order.status == OrderStatus.PROCESSING
                  and (request.user.is_processing or request.user.is_admin_role)
                  and not getattr(order, "invoice", None))
     return render(request, "orders/order_detail.html", {
         "order": order,
         "pipeline": pipeline,
+        "step_index": step_index,
         "logs": order.status_logs.select_related("changed_by"),
         "delivery": getattr(order, "delivery", None),
         "proc_flow": proc_flow,
@@ -381,6 +399,17 @@ def order_invoice(request, pk):
         pk=pk,
     )
     return render(request, "orders/invoice.html", _invoice_context(order))
+
+
+@role_required(*ALL_STAFF)
+def order_dispatch_note(request, pk):
+    """Printable dispatch / delivery note (packing slip) for an order — works
+    without a Dispatch record, so it's available even in the simple flow."""
+    order = get_object_or_404(
+        Order.objects.select_related("customer", "salesperson").prefetch_related("items"),
+        pk=pk,
+    )
+    return render(request, "orders/dispatch_note.html", {"order": order})
 
 
 @role_required(*ALL_STAFF)
@@ -852,9 +881,10 @@ def processing_action(request, pk):
             try:
                 from accounting import services as _acc
                 inv = _acc.invoice_from_order(order, user=request.user)
-                order.set_status(OrderStatus.READY, user=request.user,
+                # Simple flow has no dispatch/delivery — the order is done once invoiced.
+                order.set_status(OrderStatus.COMPLETED, user=request.user,
                                  note=f"Invoice {inv.number} created in processing")
-                messages.success(request, f"Invoice {inv.number} created — order is Ready for Dispatch.")
+                messages.success(request, f"Invoice {inv.number} created — order completed.")
             except Exception as e:
                 messages.error(request, f"Could not create invoice: {e}")
         return redirect("order_detail", pk=pk)

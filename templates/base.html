@@ -61,6 +61,7 @@
 
       {% if user.is_dispatch or user.is_delivery or user.is_admin_role %}
       <div class="nav-label">Logistics</div>
+      {% if not site.processing_invoice_flow %}
       {% if user.is_dispatch or user.is_admin_role %}
       <a href="{% url 'dispatch_list' %}" class="{% if 'dispatch' in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='truck' %} Dispatch
@@ -72,6 +73,7 @@
         {% include 'core/_icon.html' with name='pin' %} Deliveries
         {% if nav_counts.delivery %}<span class="badge">{{ nav_counts.delivery }}</span>{% endif %}
       </a>
+      {% endif %}
       {% endif %}
       <a href="{% url 'return_list' %}" class="{% if 'returns' in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='back' %} Returns
