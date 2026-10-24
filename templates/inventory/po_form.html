@@ -14,8 +14,14 @@
     <!-- Search / filter / add -->
     <div class="card-pad" style="padding-top:14px;padding-bottom:0">
       <div class="flex" style="gap:10px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="po-search" placeholder="Search products by name or SKU…"
-               style="flex:1;min-width:200px">
+        <div style="flex:1;min-width:200px;position:relative">
+          <input type="text" id="po-search" autocomplete="off" placeholder="Search a product by name or SKU to add…"
+                 style="width:100%">
+          <!-- live results dropdown -->
+          <div id="po-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);
+               z-index:50;background:var(--paper,#fff);border:1px solid var(--line,#d9d2c4);
+               border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);max-height:280px;overflow:auto"></div>
+        </div>
         <select id="po-cat" style="min-width:170px">
           <option value="">All categories</option>
           {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
@@ -23,7 +29,7 @@
         <button type="button" class="btn btn-dark btn-sm" id="po-new-item">+ New item</button>
       </div>
       <div class="small muted" style="margin:8px 0 2px" id="po-hint">
-        Search or pick a category to find items to add. Items you set a quantity on stay listed.
+        Search a product above and click <b>Add</b> — it drops into the order below. Use <b>+ New item</b> for something not in the catalogue.
       </div>
     </div>
 
@@ -38,11 +44,15 @@
           <th class="num" style="width:110px">Landed cost<div class="small muted" style="font-weight:400">BZD</div></th>
           <th class="num" style="width:100px">Selling<div class="small muted" style="font-weight:400">BZD</div></th>
           <th class="num" style="width:80px">Margin</th>
+          <th style="width:34px"></th>
         </tr></thead>
         <tbody>
           {% for p in products %}
           <tr data-id="{{ p.id }}" data-cat="{{ p.category_id }}"
-              data-search="{{ p.name|lower }} {{ p.sku|lower }}" style="display:none">
+              data-name="{{ p.name }}" data-sku="{{ p.sku }}"
+              data-search="{{ p.name|lower }} {{ p.sku|lower }}"
+              data-stock="{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}—{% endif %}"
+              {% if p.po_qty %}class="is-added"{% else %}style="display:none"{% endif %}>
             <td><b>{{ p.name }}</b><div class="mono small muted">{{ p.sku }}</div></td>
             <td class="num small muted">{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}—{% endif %}</td>
             <td class="num"><input type="text" inputmode="decimal" name="qty_{{ p.id }}" class="po-in in-qty" value="{{ p.po_qty|default:'0' }}" style="width:60px;text-align:right"></td>
@@ -51,10 +61,11 @@
             <td class="num"><input type="text" inputmode="decimal" name="cost_{{ p.id }}" class="po-in in-cost calc{% if p.po_cost %} is-dirty{% endif %}" value="{{ p.po_cost|default:'' }}" placeholder="auto" style="width:100px;text-align:right"></td>
             <td class="num"><input type="text" inputmode="decimal" name="sell_{{ p.id }}" class="po-in in-sell calc" value="{{ p.po_sell|default:'' }}" placeholder="0.00" style="width:90px;text-align:right"></td>
             <td class="num cell-margin small muted">—</td>
+            <td class="num"><button type="button" class="btn btn-ghost btn-sm row-del" title="Remove from PO">&times;</button></td>
           </tr>
           {% endfor %}
-          <tr id="po-empty"><td colspan="8" class="muted" style="text-align:center;padding:26px">
-            No items shown yet — search above or choose a category.</td></tr>
+          <tr id="po-empty"><td colspan="9" class="muted" style="text-align:center;padding:26px">
+            No items added yet — search above and click <b>Add</b>.</td></tr>
         </tbody>
       </table>
     </div>
@@ -92,7 +103,10 @@
         <span><b>Total landed (BZD)</b></span><b id="sum-total">$0.00</b></div>
     </div>
 
-    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary btn-block">{% if editing %}Save changes{% else %}Create PO{% endif %}</button></div>
+    <div class="form-actions" style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-primary btn-block" name="save" value="1">{% if editing %}Save changes{% else %}Create PO{% endif %}</button>
+      <button class="btn btn-dark btn-block" name="save_close" value="1">Save &amp; close</button>
+    </div>
   </div>
 </div>
 </form>
@@ -281,33 +295,78 @@
   if (expData && expData.length) { expData.forEach(function (x) { addExp(x.name, x.amount, x.currency); }); }
   else { addExp(); }
 
-  // ---- Search / category filter (#3) ----
+  // ---- Inline search → add picker + per-line remove ----
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   var searchEl = document.getElementById('po-search');
   var catEl = document.getElementById('po-cat');
   var emptyRow = document.getElementById('po-empty');
+  var resultsEl = document.getElementById('po-results');
 
-  function applyFilter() {
+  function rowById(id){ return tbody.querySelector('tr[data-id="' + id + '"]'); }
+  function refreshEmpty(){
+    var any = rows.some(function (tr) { return tr.classList.contains('is-added'); });
+    emptyRow.style.display = any ? 'none' : '';
+  }
+  function addRow(tr){
+    if (!tr) return;
+    tr.classList.add('is-added');
+    tr.style.display = '';
+    var q = tr.querySelector('.in-qty');
+    if (q) { if (num(q) <= 0) q.value = '1'; }
+    refreshEmpty(); recalc();
+    if (q) { q.focus(); try { q.select(); } catch(e){} }
+  }
+  function removeRow(tr){
+    tr.classList.remove('is-added');
+    tr.style.display = 'none';
+    var q = tr.querySelector('.in-qty'); if (q) q.value = '0';
+    refreshEmpty(); recalc(); renderResults();
+  }
+
+  function renderResults(){
     var term = (searchEl.value || '').trim().toLowerCase();
     var cat = catEl.value;
-    var active = term !== '' || cat !== '';
-    var shown = 0;
-    rows.forEach(function (tr) {
-      var hasQty = num(tr.querySelector('.in-qty')) > 0;
-      var match = active &&
-        (cat === '' || tr.dataset.cat === cat) &&
-        (term === '' || (tr.dataset.search || '').indexOf(term) !== -1);
-      var vis = match || hasQty;
-      tr.style.display = vis ? '' : 'none';
-      if (vis) shown++;
-    });
-    emptyRow.style.display = shown === 0 ? '' : 'none';
+    if (term === '' && cat === '') { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+    var matches = rows.filter(function (tr) {
+      if (tr.classList.contains('is-added')) return false;
+      if (cat !== '' && tr.dataset.cat !== cat) return false;
+      if (term !== '' && (tr.dataset.search || '').indexOf(term) === -1) return false;
+      return true;
+    }).slice(0, 40);
+    if (!matches.length) {
+      resultsEl.innerHTML = '<div class="small muted" style="padding:12px">No matching products. Use <b>+ New item</b> to create one.</div>';
+      resultsEl.style.display = 'block'; return;
+    }
+    resultsEl.innerHTML = matches.map(function (tr) {
+      return '<div class="po-res" data-id="' + tr.dataset.id + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line-2,#eee);cursor:pointer">' +
+        '<div><b>' + esc(tr.dataset.name) + '</b><div class="mono small muted">' + esc(tr.dataset.sku) + ' · stock ' + esc(tr.dataset.stock) + '</div></div>' +
+        '<button type="button" class="btn btn-dark btn-sm po-res-add">Add</button></div>';
+    }).join('');
+    resultsEl.style.display = 'block';
   }
-  searchEl.addEventListener('input', applyFilter);
-  catEl.addEventListener('change', applyFilter);
-  rows.forEach(function (tr) {
-    var q = tr.querySelector('.in-qty');
-    if (q) q.addEventListener('input', applyFilter);
+
+  resultsEl.addEventListener('click', function (e) {
+    var item = e.target.closest('.po-res'); if (!item) return;
+    addRow(rowById(item.dataset.id));
+    searchEl.value = ''; renderResults(); searchEl.focus();
+  });
+  searchEl.addEventListener('input', renderResults);
+  searchEl.addEventListener('focus', renderResults);
+  catEl.addEventListener('change', renderResults);
+  searchEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault(); e.stopPropagation();
+      var first = resultsEl.querySelector('.po-res');
+      if (first) { addRow(rowById(first.dataset.id)); searchEl.value = ''; renderResults(); }
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (!resultsEl.contains(e.target) && e.target !== searchEl) resultsEl.style.display = 'none';
+  });
+  // per-line remove (delegated)
+  tbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.row-del'); if (!btn) return;
+    removeRow(btn.closest('tr'));
   });
 
   // ---- New-item modal (#4) ----
@@ -325,6 +384,9 @@
     var tr = document.createElement('tr');
     tr.setAttribute('data-id', p.id);
     tr.dataset.cat = p.category_id;
+    tr.dataset.name = p.name;
+    tr.dataset.sku = p.sku;
+    tr.dataset.stock = (p.track_stock ? (p.stock_qty || '0') : '—');
     tr.dataset.search = (p.name + ' ' + p.sku).toLowerCase();
     tr.innerHTML =
       '<td><b>' + esc(p.name) + '</b><div class="mono small muted">' + esc(p.sku) + '</div></td>' +
@@ -334,11 +396,11 @@
       '<td class="num small muted cell-bzd">—</td>' +
       '<td class="num"><input type="text" inputmode="decimal" name="cost_' + p.id + '" class="po-in in-cost calc" value="" placeholder="auto" style="width:100px;text-align:right"></td>' +
       '<td class="num"><input type="text" inputmode="decimal" name="sell_' + p.id + '" class="po-in in-sell calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>' +
-      '<td class="num cell-margin small muted">—</td>';
+      '<td class="num cell-margin small muted">—</td>' +
+      '<td class="num"><button type="button" class="btn btn-ghost btn-sm row-del" title="Remove from PO">&times;</button></td>';
     tbody.insertBefore(tr, emptyRow);
     rows.push(tr);
     tr.querySelectorAll('.po-in').forEach(bindCalc);
-    tr.querySelector('.in-qty').addEventListener('input', applyFilter);
     return tr;
   }
 
@@ -365,16 +427,14 @@
         if (sellVal) { var se = tr.querySelector('.in-sell'); se.value = sellVal; }
         closeModal();
         ['it-name','it-sku','it-cost','it-sell'].forEach(function (id) { document.getElementById(id).value = ''; });
-        // reveal it via the search box so the row is clearly visible
-        searchEl.value = d.name; catEl.value = ''; applyFilter();
+        // a freshly created item goes straight onto the PO
+        addRow(tr);
         tr.scrollIntoView({ block: 'center' });
-        tr.querySelector('.in-qty').focus();
-        recalc();
       })
       .catch(function () { btn.disabled = false; errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; });
   });
 
-  applyFilter();  // start with nothing shown
+  refreshEmpty();  // show prefilled (edit) rows; otherwise the empty hint
   recalc();
 })();
 </script>

@@ -205,6 +205,8 @@ def po_create(request):
                 messages.error(request, err)
                 return redirect("po_create")
             messages.success(request, f"{po.po_no} created.")
+            if request.POST.get("save_close"):
+                return redirect("po_list")
             return redirect("po_detail", pk=po.pk)
     else:
         form = PurchaseOrderForm()
@@ -235,6 +237,8 @@ def po_edit(request, pk):
                 messages.error(request, err)
                 return redirect("po_edit", pk=po.pk)
             messages.success(request, f"{po.po_no} updated.")
+            if request.POST.get("save_close"):
+                return redirect("po_list")
             return redirect("po_detail", pk=po.pk)
     else:
         form = PurchaseOrderForm(instance=po)
