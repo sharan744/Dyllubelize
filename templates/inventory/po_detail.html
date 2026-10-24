@@ -3,10 +3,9 @@
 {% block title %}{{ po.po_no }}{% endblock %}
 {% block page_title %}Purchase Order {{ po.po_no }}{% endblock %}
 {% block topbar_actions %}
-  {% if po.status == 'draft' %}
-  <form method="post" action="{% url 'po_action' po.pk %}" style="display:inline">{% csrf_token %}
-    <button name="action" value="order" class="btn btn-dark">Mark Ordered</button></form>
-  {% endif %}
+{% if po.status != 'received' and po.status != 'cancelled' %}
+<a href="{% url 'po_edit' po.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='edit' %} Edit PO</a>
+{% endif %}
 {% endblock %}
 {% block content %}
 <a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>
@@ -73,8 +72,6 @@
       <button name="action" value="receive" class="btn btn-primary"
         onclick="return confirm('Receive this PO? Stock will be increased by the received quantities.');">
         {% include 'core/_icon.html' with name='check' %} Receive &amp; Add to Stock</button>
-      <button name="action" value="cancel" class="btn btn-danger"
-        onclick="return confirm('Cancel this PO?');">Cancel PO</button>
     </div>
     {% endif %}
     </form>
@@ -82,13 +79,13 @@
 
   <div class="card card-pad">
     <dl class="kv">
-      <dt>Status</dt><dd>{% if po.status == 'received' %}<span class="pill delivered"><span class="dot"></span>Received</span>{% elif po.status == 'ordered' %}<span class="pill confirmed"><span class="dot"></span>Ordered</span>{% elif po.status == 'cancelled' %}<span class="pill rejected"><span class="dot"></span>Cancelled</span>{% else %}<span class="pill draft"><span class="dot"></span>Draft</span>{% endif %}</dd>
+      <dt>Status</dt><dd>{% if po.status == 'received' %}<span class="pill delivered"><span class="dot"></span>Received</span>{% else %}<span class="pill draft"><span class="dot"></span>Draft</span>{% endif %}</dd>
       <dt>Supplier</dt><dd><b>{{ po.supplier.name }}</b>{% if po.supplier.phone %}<div class="small muted">{{ po.supplier.phone }}</div>{% endif %}</dd>
       <dt>Order date</dt><dd>{{ po.order_date|date:"d M Y" }}</dd>
       <dt>Expected</dt><dd>{{ po.expected_date|date:"d M Y"|default:"—" }}</dd>
       <dt>Exchange rate</dt><dd>{{ po.exchange_rate|floatformat:4 }} BZD / USD</dd>
       <dt>Goods (USD)</dt><dd>${{ po.goods_value_usd|floatformat:2|intcomma }} &nbsp;=&nbsp; {{ site.currency_symbol }}{{ po.goods_value_bzd|floatformat:2|intcomma }}</dd>
-      <dt>Expense ratio</dt><dd>{{ po.expense_ratio|floatformat:4 }}</dd>
+      <dt>Expense ratio</dt><dd>{{ po.expense_ratio|floatformat:9 }}</dd>
       <dt>Landed ×</dt><dd><b>{{ po.landed_multiplier|floatformat:4 }}</b> <span class="small muted">(USD price × this = landed BZD)</span></dd>
       {% if po.received_at %}<dt>Received</dt><dd>{{ po.received_at|date:"d M Y, H:i" }} · {{ po.received_by.display_name }}</dd>{% endif %}
       <dt>Created by</dt><dd>{{ po.created_by.display_name|default:"—" }}</dd>

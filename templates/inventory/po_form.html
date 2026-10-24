@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load humanize %}
-{% block title %}New Purchase Order{% endblock %}
-{% block page_title %}New Purchase Order{% endblock %}
+{% block title %}{% if editing %}Edit {{ po.po_no }}{% else %}New Purchase Order{% endif %}{% endblock %}
+{% block page_title %}{% if editing %}Edit Purchase Order {{ po.po_no }}{% else %}New Purchase Order{% endif %}{% endblock %}
 {% block subheading %}<div class="sub">Goods are priced in USD. Enter the exchange rate and expenses — landed cost in BZD is worked out for you.</div>{% endblock %}
 {% block content %}
 <a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>
@@ -10,6 +10,23 @@
   <div class="card">
     <div class="card-head"><h3>Products to order</h3><div class="spacer"></div>
       <span class="chip">Tip: you can type <b>20*0.86</b> in any price box</span></div>
+
+    <!-- Search / filter / add -->
+    <div class="card-pad" style="padding-top:14px;padding-bottom:0">
+      <div class="flex" style="gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="po-search" placeholder="Search products by name or SKU…"
+               style="flex:1;min-width:200px">
+        <select id="po-cat" style="min-width:170px">
+          <option value="">All categories</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+        <button type="button" class="btn btn-dark btn-sm" id="po-new-item">+ New item</button>
+      </div>
+      <div class="small muted" style="margin:8px 0 2px" id="po-hint">
+        Search or pick a category to find items to add. Items you set a quantity on stay listed.
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table class="tbl" id="po-table">
         <thead><tr>
@@ -24,17 +41,20 @@
         </tr></thead>
         <tbody>
           {% for p in products %}
-          <tr data-id="{{ p.id }}">
+          <tr data-id="{{ p.id }}" data-cat="{{ p.category_id }}"
+              data-search="{{ p.name|lower }} {{ p.sku|lower }}" style="display:none">
             <td><b>{{ p.name }}</b><div class="mono small muted">{{ p.sku }}</div></td>
             <td class="num small muted">{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}—{% endif %}</td>
-            <td class="num"><input type="text" inputmode="decimal" name="qty_{{ p.id }}" class="po-in in-qty" value="0" style="width:60px;text-align:right"></td>
-            <td class="num"><input type="text" inputmode="decimal" name="usd_{{ p.id }}" class="po-in in-usd calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="qty_{{ p.id }}" class="po-in in-qty" value="{{ p.po_qty|default:'0' }}" style="width:60px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="usd_{{ p.id }}" class="po-in in-usd calc" value="{{ p.po_usd|default:'' }}" placeholder="0.00" style="width:90px;text-align:right"></td>
             <td class="num small muted cell-bzd">—</td>
-            <td class="num"><input type="text" inputmode="decimal" name="cost_{{ p.id }}" class="po-in in-cost calc" value="" placeholder="auto" style="width:100px;text-align:right"></td>
-            <td class="num"><input type="text" inputmode="decimal" name="sell_{{ p.id }}" class="po-in in-sell calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="cost_{{ p.id }}" class="po-in in-cost calc{% if p.po_cost %} is-dirty{% endif %}" value="{{ p.po_cost|default:'' }}" placeholder="auto" style="width:100px;text-align:right"></td>
+            <td class="num"><input type="text" inputmode="decimal" name="sell_{{ p.id }}" class="po-in in-sell calc" value="{{ p.po_sell|default:'' }}" placeholder="0.00" style="width:90px;text-align:right"></td>
             <td class="num cell-margin small muted">—</td>
           </tr>
           {% endfor %}
+          <tr id="po-empty"><td colspan="8" class="muted" style="text-align:center;padding:26px">
+            No items shown yet — search above or choose a category.</td></tr>
         </tbody>
       </table>
     </div>
@@ -47,7 +67,7 @@
     <!-- Exchange rate -->
     <div style="margin-top:14px">
       <label class="small muted" style="display:block;margin-bottom:4px">Exchange rate — BZD per 1 USD</label>
-      <input type="text" inputmode="decimal" name="exchange_rate" id="fx-rate" value="2.06"
+      <input type="text" inputmode="decimal" name="exchange_rate" id="fx-rate" value="{% if editing %}{{ po.exchange_rate }}{% else %}2.06{% endif %}"
              class="calc" style="width:120px;text-align:right;font-weight:700">
     </div>
 
@@ -64,7 +84,7 @@
       <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Goods (USD)</span><b id="sum-goods-usd">$0.00</b></div>
       <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Goods (BZD)</span><b id="sum-goods-bzd">$0.00</b></div>
       <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Expenses (BZD)</span><b id="sum-exp-bzd">$0.00</b></div>
-      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Expense ratio</span><b id="sum-ratio">1.0000</b></div>
+      <div class="flex" style="justify-content:space-between;margin:3px 0"><span class="muted">Expense ratio</span><b id="sum-ratio">1.000000000</b></div>
       <div class="flex" style="justify-content:space-between;margin:6px 0;font-size:1.05rem">
         <span><b>Landed multiplier</b><div class="small muted" style="font-weight:400">USD price × this = landed BZD</div></span>
         <b id="sum-mult" style="color:var(--accent-ink)">0.0000</b></div>
@@ -72,10 +92,54 @@
         <span><b>Total landed (BZD)</b></span><b id="sum-total">$0.00</b></div>
     </div>
 
-    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary btn-block">Create PO</button></div>
+    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary btn-block">{% if editing %}Save changes{% else %}Create PO{% endif %}</button></div>
   </div>
 </div>
 </form>
+
+{% if existing_expenses %}{{ existing_expenses|json_script:"po-expenses-data" }}{% endif %}
+
+<!-- New-item modal -->
+<div id="item-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto">
+  <div class="card card-pad" style="max-width:460px;width:100%;background:var(--paper,#fff)">
+    <div class="flex" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">New item</h3>
+      <button type="button" class="btn btn-ghost btn-sm" id="item-x">&times;</button>
+    </div>
+    <div class="small muted" style="margin-bottom:12px">Creates the product in the catalogue and adds it to this PO.</div>
+    <div id="item-err" class="small" style="display:none;color:var(--danger,#c0392b);margin-bottom:10px"></div>
+
+    <div class="field"><label>Name</label>
+      <input type="text" id="it-name" placeholder="Product name"></div>
+    <div class="field"><label>Category</label>
+      <select id="it-cat">
+        <option value="">Select category…</option>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label>Product Code / SKU</label>
+      <input type="text" id="it-sku" placeholder="e.g. SP-PEPP-100"></div>
+    <div class="field"><label>Unit</label>
+      <select id="it-unit">
+        <option value="pcs">Piece(s)</option><option value="box">Box</option>
+        <option value="case">Case</option><option value="kg">Kilogram</option>
+        <option value="g">Gram</option><option value="l">Litre</option>
+        <option value="ml">Millilitre</option><option value="pack">Pack</option>
+        <option value="dozen">Dozen</option><option value="bottle">Bottle</option>
+      </select></div>
+    <div class="flex" style="gap:10px">
+      <div class="field" style="flex:1"><label>Cost price (BZD)</label>
+        <input type="text" inputmode="decimal" id="it-cost" placeholder="0.00"></div>
+      <div class="field" style="flex:1"><label>Selling price (BZD)</label>
+        <input type="text" inputmode="decimal" id="it-sell" placeholder="0.00"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 14px;cursor:pointer">
+      <input type="checkbox" id="it-track" checked> Track stock for this item</label>
+    <div class="flex" style="gap:10px;justify-content:flex-end">
+      <button type="button" class="btn btn-ghost" id="item-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="item-save">Create &amp; add</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -125,7 +189,7 @@
     document.getElementById('sum-goods-usd').textContent = fmt(goodsUsd);
     document.getElementById('sum-goods-bzd').textContent = fmt(goodsBzd);
     document.getElementById('sum-exp-bzd').textContent = fmt(expBzd);
-    document.getElementById('sum-ratio').textContent = ratio.toFixed(4);
+    document.getElementById('sum-ratio').textContent = ratio.toFixed(9);
     document.getElementById('sum-mult').textContent = mult.toFixed(4);
 
     var totalLanded = 0;
@@ -168,7 +232,25 @@
   }
   rows.forEach(function (tr) {
     tr.querySelectorAll('.po-in').forEach(bindCalc);
+    // A prefilled (edited) landed cost is the user's own — don't auto-overwrite it.
+    var c = tr.querySelector('.in-cost');
+    if (c && c.value.trim() !== '') c.dataset.dirty = '1';
   });
+
+  // --- Enter must CALCULATE the field, never submit the PO (bug fix) ---
+  var poForm = document.getElementById('po-form');
+  poForm.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var t = e.target;
+    if (!t || t.tagName !== 'INPUT') return;
+    if (t.type === 'submit' || t.type === 'button') return;
+    e.preventDefault();               // block the accidental form submit
+    var v = evalExpr(t.value);        // turn "10/5" into 2
+    if (!isNaN(v)) t.value = (+v).toFixed(2);
+    if (t.classList.contains('in-cost')) t.dataset.dirty = t.value.trim() === '' ? '' : '1';
+    recalc();
+  });
+
   fxEl.addEventListener('input', recalc);
   fxEl.addEventListener('blur', function () { var v = evalExpr(fxEl.value); if (!isNaN(v)) fxEl.value = (+v).toString(); recalc(); });
 
@@ -193,7 +275,106 @@
     row.querySelector('.exp-del').addEventListener('click', function () { row.remove(); recalc(); });
   }
   document.getElementById('exp-add').addEventListener('click', function () { addExp(); });
-  addExp();   // one empty row to start
+  // Prefill saved expenses when editing; otherwise start with one empty row.
+  var expData = null;
+  try { var ed = document.getElementById('po-expenses-data'); if (ed) expData = JSON.parse(ed.textContent); } catch (e) {}
+  if (expData && expData.length) { expData.forEach(function (x) { addExp(x.name, x.amount, x.currency); }); }
+  else { addExp(); }
+
+  // ---- Search / category filter (#3) ----
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  var searchEl = document.getElementById('po-search');
+  var catEl = document.getElementById('po-cat');
+  var emptyRow = document.getElementById('po-empty');
+
+  function applyFilter() {
+    var term = (searchEl.value || '').trim().toLowerCase();
+    var cat = catEl.value;
+    var active = term !== '' || cat !== '';
+    var shown = 0;
+    rows.forEach(function (tr) {
+      var hasQty = num(tr.querySelector('.in-qty')) > 0;
+      var match = active &&
+        (cat === '' || tr.dataset.cat === cat) &&
+        (term === '' || (tr.dataset.search || '').indexOf(term) !== -1);
+      var vis = match || hasQty;
+      tr.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    });
+    emptyRow.style.display = shown === 0 ? '' : 'none';
+  }
+  searchEl.addEventListener('input', applyFilter);
+  catEl.addEventListener('change', applyFilter);
+  rows.forEach(function (tr) {
+    var q = tr.querySelector('.in-qty');
+    if (q) q.addEventListener('input', applyFilter);
+  });
+
+  // ---- New-item modal (#4) ----
+  var modal = document.getElementById('item-modal');
+  var errEl = document.getElementById('item-err');
+  function openModal(){ errEl.style.display='none'; modal.style.display='flex'; document.getElementById('it-name').focus(); }
+  function closeModal(){ modal.style.display='none'; }
+  document.getElementById('po-new-item').addEventListener('click', openModal);
+  document.getElementById('item-x').addEventListener('click', closeModal);
+  document.getElementById('item-cancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  function csrf(){ var el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
+
+  function appendRow(p) {
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-id', p.id);
+    tr.dataset.cat = p.category_id;
+    tr.dataset.search = (p.name + ' ' + p.sku).toLowerCase();
+    tr.innerHTML =
+      '<td><b>' + esc(p.name) + '</b><div class="mono small muted">' + esc(p.sku) + '</div></td>' +
+      '<td class="num small muted">' + (p.track_stock ? (p.stock_qty || '0') : '—') + '</td>' +
+      '<td class="num"><input type="text" inputmode="decimal" name="qty_' + p.id + '" class="po-in in-qty" value="0" style="width:60px;text-align:right"></td>' +
+      '<td class="num"><input type="text" inputmode="decimal" name="usd_' + p.id + '" class="po-in in-usd calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>' +
+      '<td class="num small muted cell-bzd">—</td>' +
+      '<td class="num"><input type="text" inputmode="decimal" name="cost_' + p.id + '" class="po-in in-cost calc" value="" placeholder="auto" style="width:100px;text-align:right"></td>' +
+      '<td class="num"><input type="text" inputmode="decimal" name="sell_' + p.id + '" class="po-in in-sell calc" value="" placeholder="0.00" style="width:90px;text-align:right"></td>' +
+      '<td class="num cell-margin small muted">—</td>';
+    tbody.insertBefore(tr, emptyRow);
+    rows.push(tr);
+    tr.querySelectorAll('.po-in').forEach(bindCalc);
+    tr.querySelector('.in-qty').addEventListener('input', applyFilter);
+    return tr;
+  }
+
+  document.getElementById('item-save').addEventListener('click', function () {
+    var btn = this;
+    var fd = new FormData();
+    fd.append('name', document.getElementById('it-name').value.trim());
+    fd.append('sku', document.getElementById('it-sku').value.trim());
+    fd.append('category', document.getElementById('it-cat').value);
+    fd.append('unit', document.getElementById('it-unit').value);
+    fd.append('cost_price', document.getElementById('it-cost').value.trim());
+    fd.append('selling_price', document.getElementById('it-sell').value.trim());
+    if (document.getElementById('it-track').checked) fd.append('track_stock', 'on');
+    fd.append('csrfmiddlewaretoken', csrf());
+    btn.disabled = true;
+    fetch("{% url 'po_quick_product' %}", { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        btn.disabled = false;
+        if (!d.ok) { errEl.textContent = d.error || 'Could not create item.'; errEl.style.display = ''; return; }
+        var tr = appendRow(d);
+        // prefill selling with what was typed in the modal (if any)
+        var sellVal = document.getElementById('it-sell').value.trim();
+        if (sellVal) { var se = tr.querySelector('.in-sell'); se.value = sellVal; }
+        closeModal();
+        ['it-name','it-sku','it-cost','it-sell'].forEach(function (id) { document.getElementById(id).value = ''; });
+        // reveal it via the search box so the row is clearly visible
+        searchEl.value = d.name; catEl.value = ''; applyFilter();
+        tr.scrollIntoView({ block: 'center' });
+        tr.querySelector('.in-qty').focus();
+        recalc();
+      })
+      .catch(function () { btn.disabled = false; errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; });
+  });
+
+  applyFilter();  // start with nothing shown
   recalc();
 })();
 </script>

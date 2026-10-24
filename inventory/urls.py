@@ -10,6 +10,8 @@ urlpatterns = [
     path("suppliers/<int:pk>/edit/", views.supplier_edit, name="supplier_edit"),
     path("po/", views.po_list, name="po_list"),
     path("po/new/", views.po_create, name="po_create"),
+    path("po/quick-product/", views.po_quick_product, name="po_quick_product"),
     path("po/<int:pk>/", views.po_detail, name="po_detail"),
+    path("po/<int:pk>/edit/", views.po_edit, name="po_edit"),
     path("po/<int:pk>/action/", views.po_action, name="po_action"),
 ]

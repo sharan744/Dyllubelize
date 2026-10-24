@@ -133,6 +133,60 @@ def po_list(request):
     return render(request, "inventory/po_list.html", {"pos": pos})
 
 
+def _rebuild_po_lines(request, po, products, rate):
+    """Shared by create + edit. Reads the posted qty/usd/cost/sell + expenses,
+    works out the landed multiplier and (re)writes the PO's lines & expenses.
+    Returns an error string, or None on success."""
+    # ---- Pass 1: gather the lines (USD price) + expenses.
+    pending = []  # (product, qty, usd_price, cost_override_or_None, sell)
+    goods_usd = Decimal("0.00")
+    for p in products:
+        qty = _dec(request.POST.get(f"qty_{p.id}"))
+        if qty <= 0:
+            continue
+        usd = _dec(request.POST.get(f"usd_{p.id}"))
+        raw_cost = (request.POST.get(f"cost_{p.id}") or "").strip()
+        cost_override = _dec(raw_cost) if raw_cost else None
+        sell = _dec(request.POST.get(f"sell_{p.id}"))
+        pending.append((p, qty, usd, cost_override, sell))
+        goods_usd += qty * usd
+
+    if not pending:
+        return "Add a quantity for at least one product."
+
+    exp_names = request.POST.getlist("expense_name")
+    exp_amounts = request.POST.getlist("expense_amount")
+    exp_currencies = request.POST.getlist("expense_currency")
+    expenses_bzd = Decimal("0.00")
+    exp_rows = []
+    for i, nm in enumerate(exp_names):
+        nm = (nm or "").strip()
+        amt = _dec(exp_amounts[i] if i < len(exp_amounts) else "0")
+        cur = (exp_currencies[i] if i < len(exp_currencies) else "BZD").upper()
+        if cur not in ("BZD", "USD"):
+            cur = "BZD"
+        if nm and amt > 0:
+            exp_rows.append((nm, amt, cur))
+            expenses_bzd += amt * rate if cur == "USD" else amt
+
+    goods_bzd = goods_usd * rate
+    ratio = ((goods_bzd + expenses_bzd) / goods_bzd) if goods_bzd > 0 else Decimal("1")
+    landed_mult = rate * ratio
+
+    # ---- Replace the PO's lines & expenses (edit re-saves from scratch).
+    po.lines.all().delete()
+    po.expenses.all().delete()
+    for p, qty, usd, cost_override, sell in pending:
+        landed = cost_override if cost_override is not None else (usd * landed_mult)
+        PurchaseOrderLine.objects.create(
+            po=po, product=p, qty_ordered=qty, unit_cost_usd=usd,
+            unit_cost=Decimal(landed).quantize(Decimal("0.01")), sell_price=sell,
+        )
+    for nm, amt, cur in exp_rows:
+        PurchaseOrderExpense.objects.create(po=po, name=nm, amount=amt, currency=cur)
+    return None
+
+
 @role_required(*INV_ROLES)
 def po_create(request):
     products = Product.objects.filter(is_active=True).select_related("category")
@@ -143,69 +197,102 @@ def po_create(request):
             po.created_by = request.user
             po.status = PurchaseOrder.Status.DRAFT
             rate = _dec(request.POST.get("exchange_rate"), "2.00")
-            if rate <= 0:
-                rate = Decimal("1")
-            po.exchange_rate = rate
+            po.exchange_rate = rate if rate > 0 else Decimal("1")
             po.save()
-
-            # ---- Pass 1: gather the lines (USD price) and expenses, so we can
-            # work out the landed multiplier (FX × expense ratio) for the whole PO.
-            pending = []  # (product, qty, usd_price, cost_override_or_None, sell)
-            goods_usd = Decimal("0.00")
-            for p in products:
-                qty = _dec(request.POST.get(f"qty_{p.id}"))
-                if qty <= 0:
-                    continue
-                usd = _dec(request.POST.get(f"usd_{p.id}"))
-                raw_cost = (request.POST.get(f"cost_{p.id}") or "").strip()
-                cost_override = _dec(raw_cost) if raw_cost else None
-                sell = _dec(request.POST.get(f"sell_{p.id}"))
-                pending.append((p, qty, usd, cost_override, sell))
-                goods_usd += qty * usd
-
-            if not pending:
+            err = _rebuild_po_lines(request, po, products, po.exchange_rate)
+            if err:
                 po.delete()
-                messages.error(request, "Add a quantity for at least one product.")
+                messages.error(request, err)
                 return redirect("po_create")
-
-            # Expenses (name, amount, currency) — USD expenses convert to BZD.
-            exp_names = request.POST.getlist("expense_name")
-            exp_amounts = request.POST.getlist("expense_amount")
-            exp_currencies = request.POST.getlist("expense_currency")
-            expenses_bzd = Decimal("0.00")
-            exp_rows = []
-            for i, nm in enumerate(exp_names):
-                nm = (nm or "").strip()
-                amt = _dec(exp_amounts[i] if i < len(exp_amounts) else "0")
-                cur = (exp_currencies[i] if i < len(exp_currencies) else "BZD").upper()
-                if cur not in ("BZD", "USD"):
-                    cur = "BZD"
-                if nm and amt > 0:
-                    exp_rows.append((nm, amt, cur))
-                    expenses_bzd += amt * rate if cur == "USD" else amt
-
-            # Landed multiplier: USD → BZD landed cost, expenses spread by value.
-            goods_bzd = goods_usd * rate
-            ratio = ((goods_bzd + expenses_bzd) / goods_bzd) if goods_bzd > 0 else Decimal("1")
-            landed_mult = rate * ratio
-
-            # ---- Pass 2: write the lines with their landed cost.
-            for p, qty, usd, cost_override, sell in pending:
-                landed = cost_override if cost_override is not None else (usd * landed_mult)
-                PurchaseOrderLine.objects.create(
-                    po=po, product=p, qty_ordered=qty,
-                    unit_cost_usd=usd,
-                    unit_cost=Decimal(landed).quantize(Decimal("0.01")),
-                    sell_price=sell,
-                )
-            for nm, amt, cur in exp_rows:
-                PurchaseOrderExpense.objects.create(po=po, name=nm, amount=amt, currency=cur)
-
             messages.success(request, f"{po.po_no} created.")
             return redirect("po_detail", pk=po.pk)
     else:
         form = PurchaseOrderForm()
-    return render(request, "inventory/po_form.html", {"form": form, "products": products})
+    categories = Category.objects.all().order_by("name")
+    return render(request, "inventory/po_form.html",
+                  {"form": form, "products": products, "categories": categories})
+
+
+@role_required(*INV_ROLES)
+def po_edit(request, pk):
+    """Edit a DRAFT purchase order — quantities, prices, expenses, FX, supplier.
+    Received POs are locked (their stock has already posted)."""
+    po = get_object_or_404(PurchaseOrder, pk=pk)
+    if po.status == PurchaseOrder.Status.RECEIVED:
+        messages.error(request, f"{po.po_no} is received and can no longer be edited.")
+        return redirect("po_detail", pk=pk)
+
+    products = Product.objects.filter(is_active=True).select_related("category")
+    if request.method == "POST":
+        form = PurchaseOrderForm(request.POST, instance=po)
+        if form.is_valid():
+            po = form.save(commit=False)
+            rate = _dec(request.POST.get("exchange_rate"), "2.00")
+            po.exchange_rate = rate if rate > 0 else Decimal("1")
+            po.save()
+            err = _rebuild_po_lines(request, po, products, po.exchange_rate)
+            if err:
+                messages.error(request, err)
+                return redirect("po_edit", pk=po.pk)
+            messages.success(request, f"{po.po_no} updated.")
+            return redirect("po_detail", pk=po.pk)
+    else:
+        form = PurchaseOrderForm(instance=po)
+
+    # Annotate each product with its existing line values so the form prefills.
+    line_map = {l.product_id: l for l in po.lines.all()}
+    for p in products:
+        l = line_map.get(p.id)
+        p.po_qty = f"{l.qty_ordered:g}" if l else ""
+        p.po_usd = f"{l.unit_cost_usd:g}" if (l and l.unit_cost_usd) else ""
+        p.po_cost = f"{l.unit_cost:g}" if (l and l.unit_cost) else ""
+        p.po_sell = f"{l.sell_price:g}" if (l and l.sell_price) else ""
+    existing_expenses = [
+        {"name": e.name, "amount": f"{e.amount:g}", "currency": e.currency}
+        for e in po.expenses.all()
+    ]
+    categories = Category.objects.all().order_by("name")
+    return render(request, "inventory/po_form.html", {
+        "form": form, "products": products, "categories": categories,
+        "po": po, "editing": True, "existing_expenses": existing_expenses,
+    })
+
+
+@role_required(*INV_ROLES)
+def po_quick_product(request):
+    """Create a product inline from the New-PO screen and return it as JSON so
+    the row can be added to the order straight away. Also stored in the catalogue."""
+    from django.http import JsonResponse
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST required"}, status=405)
+
+    name = (request.POST.get("name") or "").strip()
+    sku = (request.POST.get("sku") or "").strip()
+    category_id = request.POST.get("category")
+    unit = (request.POST.get("unit") or "pcs").strip()
+    if not name or not sku or not category_id:
+        return JsonResponse({"ok": False, "error": "Name, SKU and category are required."}, status=400)
+    if Product.objects.filter(sku__iexact=sku).exists():
+        return JsonResponse({"ok": False, "error": f"SKU '{sku}' already exists."}, status=400)
+    category = Category.objects.filter(pk=category_id).first()
+    if not category:
+        return JsonResponse({"ok": False, "error": "Pick a valid category."}, status=400)
+    valid_units = {c[0] for c in Product.Unit.choices}
+    if unit not in valid_units:
+        unit = Product.Unit.PIECE
+
+    p = Product.objects.create(
+        name=name, sku=sku, category=category, unit=unit,
+        selling_price=_dec(request.POST.get("selling_price")),
+        cost_price=_dec(request.POST.get("cost_price")),
+        track_stock=(request.POST.get("track_stock") == "on"),
+        is_active=True,
+    )
+    return JsonResponse({
+        "ok": True, "id": p.id, "name": p.name, "sku": p.sku,
+        "category_id": p.category_id, "unit_label": p.get_unit_display(),
+        "track_stock": p.track_stock, "stock_qty": f"{p.stock_qty:g}",
+    })
 
 
 @role_required(*INV_ROLES)
@@ -221,19 +308,12 @@ def po_action(request, pk):
     if request.method != "POST":
         return redirect("po_detail", pk=pk)
     action = request.POST.get("action")
-    if action == "order" and po.status == PurchaseOrder.Status.DRAFT:
-        po.status = PurchaseOrder.Status.ORDERED
-        po.save(update_fields=["status"])
-        messages.info(request, f"{po.po_no} marked as ordered.")
-    elif action == "receive" and po.status != PurchaseOrder.Status.RECEIVED:
+    # Simplified flow: a PO is Draft until it is Received (no Ordered / Cancelled).
+    if action == "receive" and po.status != PurchaseOrder.Status.RECEIVED:
         received_map = {}
         for line in po.lines.all():
             received_map[str(line.id)] = _dec(
                 request.POST.get(f"recv_{line.id}"), str(line.qty_ordered))
         po.receive(user=request.user, received_map=received_map)
         messages.success(request, f"{po.po_no} received — stock updated.")
-    elif action == "cancel" and po.status != PurchaseOrder.Status.RECEIVED:
-        po.status = PurchaseOrder.Status.CANCELLED
-        po.save(update_fields=["status"])
-        messages.warning(request, f"{po.po_no} cancelled.")
     return redirect("po_detail", pk=pk)

@@ -109,8 +109,8 @@ class PurchaseOrder(models.Model):
         across products in proportion to value (matches the supplier-sheet method)."""
         gb = self.goods_value_bzd
         if gb <= 0:
-            return Decimal("1.0000")
-        return ((gb + self.total_expenses) / gb).quantize(Decimal("0.0001"))
+            return Decimal("1.000000000")
+        return ((gb + self.total_expenses) / gb).quantize(Decimal("0.000000001"))
 
     @property
     def landed_multiplier(self):

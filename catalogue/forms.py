@@ -19,4 +19,6 @@ class ProductForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["category"].queryset = Category.objects.filter(is_active=True)
+        # Show every category from the table (ordered), so the dropdown is never
+        # empty just because a category was marked inactive.
+        self.fields["category"].queryset = Category.objects.all().order_by("name")
