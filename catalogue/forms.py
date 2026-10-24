@@ -13,8 +13,9 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = ("name", "category", "sku", "brand", "image", "long_description",
-                  "unit", "selling_price", "cost_price", "stock_qty", "reorder_point",
-                  "track_stock", "is_perishable", "expiry_alert_days", "is_active")
+                  "unit", "selling_price", "cost_price", "taxable", "stock_qty",
+                  "reorder_point", "track_stock", "is_perishable", "expiry_alert_days",
+                  "is_active")
         widgets = {"long_description": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):

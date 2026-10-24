@@ -124,8 +124,10 @@
           </label>
         </div>
         <button name="action" value="create_invoice" class="btn btn-primary"
-          onclick="return confirm('Create the invoice for this order and mark it Ready for Dispatch?');">
-          {% include 'core/_icon.html' with name='file' %} Create Invoice &amp; Mark Ready</button>
+          onclick="return confirm('Create the invoice and mark this order Completed? (No dispatch needed.)');">
+          {% include 'core/_icon.html' with name='file' %} Create Invoice &amp; Complete Order</button>
+        {% elif proc_flow and order.invoice %}
+        <p class="small" style="margin:0">Invoice <b>{{ order.invoice.number }}</b> created · <a href="{% url 'order_invoice' order.pk %}">View</a> — order completed.</p>
         {% else %}
         {% if order.invoice %}<p class="small" style="margin:0 0 10px">Invoice <b>{{ order.invoice.number }}</b> created · <a href="{% url 'order_invoice' order.pk %}">View</a></p>{% endif %}
         <button name="action" value="ready" class="btn btn-primary">Mark Ready for Dispatch</button>

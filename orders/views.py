@@ -386,6 +386,7 @@ def _invoice_context(order, revised=False):
     # Build the line list the document renders (net of returns when revised).
     inv_items = []
     subtotal = Decimal("0.00")
+    taxable_subtotal = Decimal("0.00")
     for i in order.items.all():
         qty = i.quantity
         if revised and i.product_id in returned and returned[i.product_id] > 0:
@@ -395,11 +396,14 @@ def _invoice_context(order, revised=False):
         if revised and qty <= 0:
             continue  # fully returned line — drop it
         line_total = (i.unit_price * qty).quantize(Decimal("0.01"))
+        item_taxable = getattr(getattr(i, "product", None), "taxable", True)
         subtotal += line_total
+        if item_taxable:
+            taxable_subtotal += line_total
         inv_items.append({
             "product_name": i.product_name, "note": i.note, "sku": i.sku,
             "unit": i.unit, "unit_price": i.unit_price,
-            "quantity": qty, "line_total": line_total,
+            "quantity": qty, "line_total": line_total, "taxable": item_taxable,
         })
 
     discount_amount = (subtotal * order.discount_percent / Decimal("100")).quantize(Decimal("0.01"))
@@ -415,7 +419,9 @@ def _invoice_context(order, revised=False):
         tax_rate = site.tax_percent
     else:
         tax_rate = Decimal("0")
-    tax_amount = (net * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+    # Tax applies only to taxable lines, net of the order discount.
+    taxable_net = (taxable_subtotal * (Decimal("1") - order.discount_percent / Decimal("100"))).quantize(Decimal("0.01"))
+    tax_amount = (taxable_net * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
     grand_total = net + tax_amount
     if inv is not None:
         number = inv.number
@@ -643,17 +649,21 @@ def _render_invoice_pdf(ctx):
     story += [signoffs, Spacer(1, 12)]
 
     # ---- Line items ----
+    cellC = ParagraphStyle("cellC", parent=cellL, alignment=1)  # centred
+    _taxlbl = ctx["tax_label"] if ctx["tax_is_gst"] else ""
     rows = [[Paragraph("<b>Product</b>", cellL),
              Paragraph("<b>Unit price</b>", cellR), Paragraph("<b>Qty</b>", cellR),
-             Paragraph("<b>Amount</b>", cellR)]]
+             Paragraph("<b>Tax</b>", cellC), Paragraph("<b>Amount</b>", cellR)]]
     for i in ctx["inv_items"]:
+        tax_cell = _taxlbl if (ctx["tax_is_gst"] and i.get("taxable", True)) else "—"
         rows.append([
             Paragraph(i["product_name"], cellL),
             Paragraph(money(i["unit_price"]), cellR),
             Paragraph(f"{i['quantity']:.0f}", cellR),
+            Paragraph(tax_cell, cellC),
             Paragraph(money(i["line_total"]), cellR),
         ])
-    items = Table(rows, colWidths=[100 * mm, 30 * mm, 16 * mm, 26 * mm], repeatRows=1)
+    items = Table(rows, colWidths=[86 * mm, 28 * mm, 14 * mm, 18 * mm, 26 * mm], repeatRows=1)
     items.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -976,7 +986,10 @@ def processing_action(request, pk):
                 # Simple flow has no dispatch/delivery — the order is done once invoiced.
                 order.set_status(OrderStatus.COMPLETED, user=request.user,
                                  note=f"Invoice {inv.number} created in processing")
-                messages.success(request, f"Invoice {inv.number} created — order completed.")
+                messages.success(
+                    request,
+                    f"Order {order.order_no} completed — invoice {inv.number} created "
+                    f"(no dispatch needed). View it under Invoices & A/R.")
             except Exception as e:
                 messages.error(request, f"Could not create invoice: {e}")
         return redirect("order_detail", pk=pk)

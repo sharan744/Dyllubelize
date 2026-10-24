@@ -166,12 +166,15 @@ def invoice_from_order(order, user=None, tax_percent=None, terms_days=30, post=T
     inv = Invoice.objects.create(
         customer=order.customer, order=order, date=timezone.localdate(),
         terms_days=terms_days, tax_percent=tax_percent or 0,
-        memo=f"Order {order.order_no}", created_by=user, status=DocStatus.DRAFT)
+        memo=f"Order {order.order_no}", created_by=user, status=DocStatus.DRAFT,
+        show_in_ui=True)   # order invoices are visible in the Invoices & A/R list
     sales = acc(CODES["SALES"])
     for it in order.items.all():
+        prod = getattr(it, "product", None)
         InvoiceLine.objects.create(
-            invoice=inv, product=getattr(it, "product", None), income_account=sales,
-            description=it.product_name, quantity=it.quantity, unit_price=it.unit_price)
+            invoice=inv, product=prod, income_account=sales,
+            description=it.product_name, quantity=it.quantity, unit_price=it.unit_price,
+            taxable=getattr(prod, "taxable", True))
     if post:
         post_invoice(inv, user=user)
     return inv

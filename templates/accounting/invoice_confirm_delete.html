@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Delete {{ inv.number }}{% endblock %}
+{% block page_title %}Delete Invoice {{ inv.number }}{% endblock %}
+{% block content %}
+<a href="{% url 'acc_invoice_detail' inv.pk %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to invoice</a>
+
+<div class="card card-pad" style="max-width:560px">
+  <h3 style="margin:0 0 4px">Delete {{ inv.number }}?</h3>
+  <p class="small muted" style="margin:0 0 14px">
+    {{ inv.customer }} · {{ inv.date|date:"d M Y" }} · {{ sym }}{{ inv.total|floatformat:2|intcomma }}
+    {% if inv.order_id %}· from order {{ inv.order.order_no }}{% endif %}
+  </p>
+  <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">
+    <b style="color:var(--danger,#c0392b)">This removes the invoice and reverses its ledger entry.</b>
+    {% if inv.order_id %}<p class="small" style="margin:6px 0 0">The linked order will no longer have an invoice.</p>{% endif %}
+  </div>
+  <form method="post" action="{% url 'acc_invoice_delete' inv.pk %}">{% csrf_token %}
+    <div class="flex" style="gap:10px">
+      <a href="{% url 'acc_invoice_detail' inv.pk %}" class="btn btn-ghost">Cancel</a>
+      <button class="btn btn-primary" style="background:var(--danger,#c0392b);border-color:var(--danger,#c0392b)"
+        onclick="return confirm('Delete {{ inv.number }}? This cannot be undone.');">Delete {{ inv.number }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

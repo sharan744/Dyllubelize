@@ -367,6 +367,7 @@ def po_quick_product(request):
         selling_price=_dec(request.POST.get("selling_price")),
         cost_price=_dec(request.POST.get("cost_price")),
         track_stock=(request.POST.get("track_stock") == "on"),
+        taxable=(request.POST.get("taxable", "on") != "off"),
         is_active=True,
     )
     return JsonResponse({

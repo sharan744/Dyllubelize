@@ -76,6 +76,10 @@ class Product(models.Model):
         help_text="Flag for reorder when stock reaches this level (0 = no alert).",
     )
     track_stock = models.BooleanField(default=False)
+    taxable = models.BooleanField(
+        "GST / tax applies", default=True,
+        help_text="Tick if GST (or the configured tax) is charged on this item. "
+                  "Untick for tax-exempt items (e.g. some foods).")
     damaged_qty = models.DecimalField(
         "Damaged / written-off stock", max_digits=12, decimal_places=2, default=0,
         help_text="Cumulative units returned damaged and written off (not sellable).",

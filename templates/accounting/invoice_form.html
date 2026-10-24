@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
-{% block title %}New Invoice{% endblock %}
-{% block page_title %}New Invoice{% endblock %}
+{% block title %}{% if editing %}Edit {{ inv.number }}{% else %}New Invoice{% endif %}{% endblock %}
+{% block page_title %}{% if editing %}Edit Invoice {{ inv.number }}{% else %}New Invoice{% endif %}{% endblock %}
 {% block content %}
 <a href="{% url 'acc_invoice_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to invoices</a>
 <form method="post" class="card card-pad">{% csrf_token %}
@@ -8,50 +8,123 @@
     <div class="field"><label>Customer</label>{{ form.customer }}</div>
     <div class="field"><label>Date</label>{{ form.date }}</div>
     <div class="field"><label>Terms (days)</label>{{ form.terms_days }}</div>
-    <div class="field"><label>Tax %</label>{{ form.tax_percent }}</div>
+    <div class="field"><label>Tax % (GST)</label>{{ form.tax_percent }}
+      <div class="small muted">Applied only to lines marked “GST”. Set 0 for a fully non-tax invoice.</div></div>
     <div class="field" style="grid-column:span 2"><label>Memo</label>{{ form.memo }}</div>
   </div>
   {% for e in form.non_field_errors %}<div class="err">{{ e }}</div>{% endfor %}
 
-  <div class="table-wrap" style="margin-top:10px"><table class="tbl" id="inv-lines">
-    <thead><tr><th style="width:50%">Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th></th></tr></thead>
+  <div class="table-wrap" style="margin-top:10px;overflow:visible"><table class="tbl" id="inv-lines">
+    <thead><tr>
+      <th style="width:46%">Description</th><th class="num">Qty</th><th class="num">Unit price</th>
+      <th style="text-align:center">Tax</th><th class="num">Amount</th><th></th>
+    </tr></thead>
     <tbody></tbody>
   </table></div>
   <button type="button" class="btn btn-soft btn-sm" id="add-line">+ Add line</button>
 
-  <div class="flex" style="justify-content:flex-end;margin-top:14px"><div>Subtotal: <b id="sub">$0.00</b></div></div>
+  <div class="flex" style="justify-content:flex-end;margin-top:14px">
+    <div style="min-width:220px">
+      <div class="flex" style="justify-content:space-between"><span class="muted">Subtotal</span><b id="sub">$0.00</b></div>
+      <div class="flex" style="justify-content:space-between"><span class="muted">Tax (<span id="trate">0</span>%)</span><b id="tax">$0.00</b></div>
+      <div class="flex" style="justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px"><b>Total</b><b id="tot">$0.00</b></div>
+    </div>
+  </div>
 
   <div class="form-actions">
-    <button class="btn btn-primary" data-busy>Create & Post Invoice</button>
+    <button class="btn btn-primary" data-busy>{% if editing %}Save changes{% else %}Create &amp; Post Invoice{% endif %}</button>
     <a href="{% url 'acc_invoice_list' %}" class="btn btn-ghost">Cancel</a>
   </div>
 </form>
+
 <script>
 (function(){
   const sym="{{ sym|escapejs }}";
+  const PRODUCTS = {{ products_json|safe }};
+  const EXISTING = {% if existing_lines_json %}{{ existing_lines_json|safe }}{% else %}[]{% endif %};
   const tbody=document.querySelector('#inv-lines tbody');
+  const taxPctEl=document.querySelector('[name="tax_percent"]');
   function money(n){return sym+(Math.round((+n||0)*100)/100).toFixed(2);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
   function addRow(){
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><input type="text" name="desc"></td>'+
-      '<td class="num"><input type="number" step="0.01" min="0" name="qty" value="1" class="q" style="width:80px"></td>'+
-      '<td class="num"><input type="number" step="0.01" min="0" name="price" value="0" class="p" style="width:110px"></td>'+
+    tr.innerHTML=
+      '<td style="position:relative"><input type="text" name="desc" class="desc" autocomplete="off" placeholder="Type to search products…" style="width:100%">'+
+        '<div class="ac" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--paper,#fff);border:1px solid var(--line,#d9d2c4);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:220px;overflow:auto"></div></td>'+
+      '<td class="num"><input type="number" step="0.01" min="0" name="qty" value="1" class="q" style="width:72px"></td>'+
+      '<td class="num"><input type="number" step="0.01" min="0" name="price" value="0" class="p" style="width:100px"></td>'+
+      '<td style="text-align:center"><select name="taxable" class="tx"><option value="1">GST</option><option value="0">No tax</option></select></td>'+
       '<td class="num amt">'+money(0)+'</td>'+
-      '<td><button type="button" class="rm">✕</button></td>';
+      '<td><button type="button" class="rm btn btn-ghost btn-sm">✕</button></td>';
     tbody.appendChild(tr);
+    return tr;
   }
+
   function recalc(){
-    let sub=0;
+    let sub=0, taxbase=0;
+    const rate=(+((taxPctEl&&taxPctEl.value)||0))||0;
     tbody.querySelectorAll('tr').forEach(tr=>{
       const a=(+tr.querySelector('.q').value||0)*(+tr.querySelector('.p').value||0);
       tr.querySelector('.amt').textContent=money(a); sub+=a;
+      if(tr.querySelector('.tx').value==='1') taxbase+=a;
     });
+    const tax=taxbase*rate/100;
     document.getElementById('sub').textContent=money(sub);
+    document.getElementById('trate').textContent=(Math.round(rate*100)/100);
+    document.getElementById('tax').textContent=money(tax);
+    document.getElementById('tot').textContent=money(sub+tax);
   }
+
+  // ---- product autocomplete on the description field ----
+  function renderAC(tr){
+    const inp=tr.querySelector('.desc'), box=tr.querySelector('.ac');
+    const term=(inp.value||'').trim().toLowerCase();
+    if(term===''){ box.style.display='none'; box.innerHTML=''; return; }
+    const matches=PRODUCTS.filter(p=>(p.name+' '+p.sku).toLowerCase().indexOf(term)!==-1).slice(0,25);
+    if(!matches.length){ box.style.display='none'; return; }
+    box.innerHTML=matches.map((p,idx)=>
+      '<div class="ac-item" data-i="'+idx+'" style="display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line-2,#eee);cursor:pointer">'+
+        '<div><b>'+esc(p.name)+'</b> <span class="small muted mono">'+esc(p.sku)+'</span></div>'+
+        '<button type="button" class="btn btn-dark btn-sm ac-add">Add</button></div>').join('');
+    box._matches=matches;
+    box.style.display='block';
+  }
+  function pick(tr,p){
+    tr.querySelector('.desc').value=p.name;
+    tr.querySelector('.p').value=p.price;
+    tr.querySelector('.tx').value=p.taxable?'1':'0';
+    tr.querySelector('.ac').style.display='none';
+    recalc();
+  }
+
+  tbody.addEventListener('input',e=>{
+    if(e.target.classList.contains('desc')) renderAC(e.target.closest('tr'));
+    recalc();
+  });
+  tbody.addEventListener('change',e=>{ if(e.target.classList.contains('tx')) recalc(); });
+  tbody.addEventListener('click',e=>{
+    const item=e.target.closest('.ac-item');
+    if(item){ const tr=e.target.closest('tr'); const box=tr.querySelector('.ac'); pick(tr, box._matches[+item.dataset.i]); return; }
+    if(e.target.classList.contains('rm')){ e.target.closest('tr').remove(); recalc(); }
+  });
+  if(taxPctEl) taxPctEl.addEventListener('input',recalc);
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.desc') && !e.target.closest('.ac'))
+      tbody.querySelectorAll('.ac').forEach(b=>b.style.display='none');
+  });
   document.getElementById('add-line').addEventListener('click',addRow);
-  tbody.addEventListener('input',recalc);
-  tbody.addEventListener('click',e=>{if(e.target.classList.contains('rm')){e.target.closest('tr').remove();recalc();}});
-  addRow();
+  // Prefill existing lines when editing; otherwise start with one empty row.
+  if(EXISTING.length){
+    EXISTING.forEach(function(l){
+      const tr=addRow();
+      tr.querySelector('.desc').value=l.desc;
+      tr.querySelector('.q').value=l.qty;
+      tr.querySelector('.p').value=l.price;
+      tr.querySelector('.tx').value=l.taxable?'1':'0';
+    });
+  } else { addRow(); }
+  recalc();
 })();
 </script>
 {% endblock %}

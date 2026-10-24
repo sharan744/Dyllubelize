@@ -175,8 +175,17 @@ class Order(models.Model):
         return self._tax_setting[1]
 
     @property
+    def taxable_subtotal(self):
+        """Line total of only the items that have GST/tax applied."""
+        return sum((i.line_total for i in self.items.all()
+                    if getattr(getattr(i, "product", None), "taxable", True)),
+                   Decimal("0.00"))
+
+    @property
     def tax_amount(self):
-        return (self.total * self.tax_percent_effective / Decimal("100")).quantize(Decimal("0.01"))
+        # Tax applies to the taxable items only, net of any order discount.
+        taxable_net = self.taxable_subtotal * (Decimal("1") - self.discount_percent / Decimal("100"))
+        return (taxable_net * self.tax_percent_effective / Decimal("100")).quantize(Decimal("0.01"))
 
     @property
     def total_with_tax(self):

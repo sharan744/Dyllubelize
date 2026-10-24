@@ -6,6 +6,8 @@
 {% block topbar_actions %}
 <a href="{% url 'acc_payment_new' %}?customer={{ inv.customer_id }}" class="btn btn-soft btn-sm">Receive Payment</a>
 <a href="{% url 'acc_statement' inv.customer_id %}" class="btn btn-soft btn-sm">Statement</a>
+<a href="{% url 'acc_invoice_edit' inv.pk %}" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='edit' %} Edit</a>
+<a href="{% url 'acc_invoice_delete' inv.pk %}" class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</a>
 {% if inv.status != 'void' %}
 <form method="post" action="{% url 'acc_invoice_void' inv.pk %}" style="display:inline" onsubmit="return confirm('Void this invoice? Its ledger entry will be removed.')">{% csrf_token %}<button class="btn btn-sm" style="background:#fde2e2;color:#c92a2a">Void</button></form>
 {% endif %}

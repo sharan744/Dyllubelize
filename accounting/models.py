@@ -231,8 +231,13 @@ class Invoice(models.Model):
         return q(sum((l.amount for l in self.lines.all()), Z))
 
     @property
+    def taxable_subtotal(self):
+        """Sum of only the lines that have tax applied."""
+        return q(sum((l.amount for l in self.lines.all() if l.taxable), Z))
+
+    @property
     def tax(self):
-        return q(self.subtotal * (self.tax_percent or 0) / 100)
+        return q(self.taxable_subtotal * (self.tax_percent or 0) / 100)
 
     @property
     def total(self):
@@ -281,6 +286,7 @@ class InvoiceLine(models.Model):
     description = models.CharField(max_length=200)
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    taxable = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["id"]

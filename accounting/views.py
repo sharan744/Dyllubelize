@@ -325,47 +325,129 @@ def journal_new(request):
 # ============================================================
 @admin_only
 def invoice_list(request):
+    from django.utils import timezone
     status = request.GET.get("status", "")
-    qs = Invoice.objects.select_related("customer", "order").filter(show_in_ui=True)
+    period = request.GET.get("period", "")   # "", day, week, month
+    # Show every invoice in the A/R list (including those raised from orders).
+    qs = Invoice.objects.select_related("customer", "order").order_by("-date", "-id")
     if status:
         qs = qs.filter(status=status)
+    today = timezone.localdate()
+    if period == "day":
+        qs = qs.filter(date=today)
+    elif period == "week":
+        qs = qs.filter(date__gte=today - timezone.timedelta(days=7))
+    elif period == "month":
+        qs = qs.filter(date__gte=today - timezone.timedelta(days=30))
     invoices = list(qs[:400])
     total_open = sum((i.balance for i in invoices if i.balance > 0), Z)
     return render(request, "accounting/invoice_list.html", {
-        "invoices": invoices, "sym": _sym(), "status": status,
+        "invoices": invoices, "sym": _sym(), "status": status, "period": period,
         "total_open": total_open, "statuses": DocStatus.choices})
+
+
+def _products_for_picker():
+    """Active products as lightweight dicts for the invoice line autocomplete."""
+    from catalogue.models import Product
+    return [
+        {"name": p.name, "sku": p.sku, "price": f"{p.selling_price:.2f}",
+         "taxable": bool(p.taxable)}
+        for p in Product.objects.filter(is_active=True).only(
+            "name", "sku", "selling_price", "taxable").order_by("name")
+    ]
+
+
+def _write_invoice_lines(request, inv):
+    """(Re)create an invoice's lines from the posted desc/qty/price/taxable rows.
+    Returns the number of lines written."""
+    descs = request.POST.getlist("desc")
+    qtys = request.POST.getlist("qty")
+    prices = request.POST.getlist("price")
+    taxables = request.POST.getlist("taxable")   # "1" / "0", one per line
+    sales = services.acc(services.CODES["SALES"])
+    n = 0
+    for i, d in enumerate(descs):
+        if not d.strip():
+            continue
+        try:
+            qty = Decimal(qtys[i] or "1")
+            pr = Decimal(prices[i] or "0")
+        except (InvalidOperation, IndexError):
+            continue
+        tx = (taxables[i] if i < len(taxables) else "1") != "0"
+        InvoiceLine.objects.create(invoice=inv, description=d[:200],
+                                   quantity=qty, unit_price=pr, income_account=sales,
+                                   taxable=tx)
+        n += 1
+    return n
 
 
 @admin_only
 def invoice_new(request):
+    import json
     form = InvoiceForm(request.POST or None)
-    products = None
     if request.method == "POST" and form.is_valid():
         inv = form.save(commit=False)
         inv.created_by = request.user
         inv.save()
-        # lines
-        descs = request.POST.getlist("desc")
-        qtys = request.POST.getlist("qty")
-        prices = request.POST.getlist("price")
-        sales = services.acc(services.CODES["SALES"])
-        for i, d in enumerate(descs):
-            if not d.strip():
-                continue
-            try:
-                qty = Decimal(qtys[i] or "1")
-                pr = Decimal(prices[i] or "0")
-            except (InvalidOperation, IndexError):
-                continue
-            InvoiceLine.objects.create(invoice=inv, description=d[:200],
-                                       quantity=qty, unit_price=pr, income_account=sales)
-        if inv.lines.exists():
+        if _write_invoice_lines(request, inv):
             services.post_invoice(inv, user=request.user)
             messages.success(request, f"Invoice {inv.number} created and posted.")
             return redirect("acc_invoice_detail", pk=inv.pk)
         inv.delete()
         messages.error(request, "Add at least one line item.")
-    return render(request, "accounting/invoice_form.html", {"form": form})
+    return render(request, "accounting/invoice_form.html", {
+        "form": form, "sym": _sym(),
+        "products_json": json.dumps(_products_for_picker()),
+    })
+
+
+@admin_only
+def invoice_edit(request, pk):
+    import json
+    inv = get_object_or_404(Invoice.objects.select_related("customer"), pk=pk)
+    if inv.amount_paid and inv.amount_paid > 0:
+        messages.error(request, f"Invoice {inv.number} has a payment recorded — "
+                        "reverse the payment before editing it.")
+        return redirect("acc_invoice_detail", pk=pk)
+    form = InvoiceForm(request.POST or None, instance=inv)
+    if request.method == "POST" and form.is_valid():
+        inv = form.save(commit=False)
+        inv.save()
+        inv.lines.all().delete()
+        if _write_invoice_lines(request, inv):
+            services.post_invoice(inv, user=request.user)   # re-voids + reposts
+            messages.success(request, f"Invoice {inv.number} updated.")
+            return redirect("acc_invoice_detail", pk=inv.pk)
+        messages.error(request, "Add at least one line item.")
+    existing = [{"desc": l.description, "qty": f"{l.quantity:g}",
+                 "price": f"{l.unit_price:.2f}", "taxable": bool(l.taxable)}
+                for l in inv.lines.all()]
+    return render(request, "accounting/invoice_form.html", {
+        "form": form, "sym": _sym(), "editing": True, "inv": inv,
+        "products_json": json.dumps(_products_for_picker()),
+        "existing_lines_json": json.dumps(existing),
+    })
+
+
+@admin_only
+def invoice_delete(request, pk):
+    inv = get_object_or_404(Invoice.objects.select_related("customer", "order"), pk=pk)
+    if inv.amount_paid and inv.amount_paid > 0:
+        messages.error(request, f"Invoice {inv.number} has a payment recorded — "
+                        "reverse the payment before deleting it.")
+        return redirect("acc_invoice_detail", pk=pk)
+    if request.method != "POST":
+        return render(request, "accounting/invoice_confirm_delete.html",
+                      {"inv": inv, "sym": _sym()})
+    number = inv.number
+    try:
+        services.void_invoice(inv, user=request.user)   # reverse the ledger entry
+    except Exception:
+        pass
+    inv.delete()
+    messages.success(request, f"Invoice {number} deleted.")
+    return redirect("acc_invoice_list")
 
 
 @admin_only

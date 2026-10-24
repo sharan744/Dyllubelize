@@ -159,8 +159,10 @@
       <div class="field" style="flex:1"><label>Selling price (BZD)</label>
         <input type="text" inputmode="decimal" id="it-sell" placeholder="0.00"></div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 14px;cursor:pointer">
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 6px;cursor:pointer">
       <input type="checkbox" id="it-track" checked> Track stock for this item</label>
+    <label style="display:flex;align-items:center;gap:8px;margin:0 0 14px;cursor:pointer">
+      <input type="checkbox" id="it-taxable" checked> GST / tax applies to this item</label>
     <div class="flex" style="gap:10px;justify-content:flex-end">
       <button type="button" class="btn btn-ghost" id="item-cancel">Cancel</button>
       <button type="button" class="btn btn-primary" id="item-save">Create &amp; add</button>
@@ -427,6 +429,7 @@
     fd.append('cost_price', document.getElementById('it-cost').value.trim());
     fd.append('selling_price', document.getElementById('it-sell').value.trim());
     if (document.getElementById('it-track').checked) fd.append('track_stock', 'on');
+    fd.append('taxable', document.getElementById('it-taxable').checked ? 'on' : 'off');
     fd.append('csrfmiddlewaretoken', csrf());
     btn.disabled = true;
     fetch("{% url 'po_quick_product' %}", { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
