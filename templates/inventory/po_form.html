@@ -6,6 +6,19 @@
 {% block content %}
 <a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>
 <form method="post" id="po-form">{% csrf_token %}
+{% if deps and deps.received %}
+<div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:16px">
+  <h3 style="margin:0 0 6px;color:var(--danger,#c0392b)">⚠ This PO has already been received</h3>
+  <p class="small" style="margin:0 0 8px">Editing is allowed, but these were posted when it was received and will <b>not</b> change automatically:</p>
+  <ul class="small" style="margin:0 0 4px 18px">
+    <li>Stock was added for its items (catalogue cost/selling prices were updated from this PO).</li>
+    {% if deps.bills %}{% for b in deps.bills %}
+    <li>Supplier bill <b>{{ b.number }}</b> posted to Accounts Payable — total {{ site.currency_symbol }}{{ b.total|floatformat:2 }}{% if b.paid %} · paid {{ site.currency_symbol }}{{ b.paid|floatformat:2 }}{% endif %}.</li>
+    {% endfor %}{% endif %}
+  </ul>
+  <p class="small" style="margin:6px 0 0">Saving here updates the PO document only. Adjust stock in Inventory and the bill in Accounting if your changes affect them.</p>
+</div>
+{% endif %}
 <div class="detail-grid">
   <div class="card">
     <div class="card-head"><h3>Products to order</h3><div class="spacer"></div>

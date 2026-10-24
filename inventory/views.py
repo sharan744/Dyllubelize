@@ -133,7 +133,7 @@ def po_list(request):
     return render(request, "inventory/po_list.html", {"pos": pos})
 
 
-def _rebuild_po_lines(request, po, products, rate):
+def _rebuild_po_lines(request, po, products, rate, mark_received=False):
     """Shared by create + edit. Reads the posted qty/usd/cost/sell + expenses,
     works out the landed multiplier and (re)writes the PO's lines & expenses.
     Returns an error string, or None on success."""
@@ -181,6 +181,7 @@ def _rebuild_po_lines(request, po, products, rate):
         PurchaseOrderLine.objects.create(
             po=po, product=p, qty_ordered=qty, unit_cost_usd=usd,
             unit_cost=Decimal(landed).quantize(Decimal("0.01")), sell_price=sell,
+            qty_received=(qty if mark_received else Decimal("0")),
         )
     for nm, amt, cur in exp_rows:
         PurchaseOrderExpense.objects.create(po=po, name=nm, amount=amt, currency=cur)
@@ -215,15 +216,41 @@ def po_create(request):
                   {"form": form, "products": products, "categories": categories})
 
 
+def _po_dependencies(po):
+    """What a received PO is tied to downstream — used to warn before an edit or
+    delete. Returns a dict the templates render."""
+    bills, bill_total, paid_total = [], Decimal("0.00"), Decimal("0.00")
+    try:
+        for b in po.bills.all():
+            tot = b.total
+            paid = b.amount_paid
+            bill_total += tot
+            paid_total += paid
+            bills.append({"number": b.number, "total": tot, "paid": paid,
+                          "status": b.get_status_display()})
+    except Exception:
+        pass
+    received_lines = []
+    if po.status == PurchaseOrder.Status.RECEIVED:
+        for l in po.lines.select_related("product").all():
+            qty = l.qty_received or l.qty_ordered
+            if l.product and l.product.track_stock and qty:
+                received_lines.append((l.product, qty))
+    return {
+        "received": po.status == PurchaseOrder.Status.RECEIVED,
+        "bills": bills, "bill_total": bill_total, "paid_total": paid_total,
+        "has_paid_bill": paid_total > 0,
+        "received_lines": received_lines,
+        "price_updated": po.status == PurchaseOrder.Status.RECEIVED,
+    }
+
+
 @role_required(*INV_ROLES)
 def po_edit(request, pk):
-    """Edit a DRAFT purchase order — quantities, prices, expenses, FX, supplier.
-    Received POs are locked (their stock has already posted)."""
+    """Edit a purchase order at any status — quantities, prices, expenses, FX,
+    supplier. For a received PO the dependency warning is shown; the edit updates
+    the PO document only and does not silently re-post stock or the supplier bill."""
     po = get_object_or_404(PurchaseOrder, pk=pk)
-    if po.status == PurchaseOrder.Status.RECEIVED:
-        messages.error(request, f"{po.po_no} is received and can no longer be edited.")
-        return redirect("po_detail", pk=pk)
-
     products = Product.objects.filter(is_active=True).select_related("category")
     if request.method == "POST":
         form = PurchaseOrderForm(request.POST, instance=po)
@@ -232,11 +259,18 @@ def po_edit(request, pk):
             rate = _dec(request.POST.get("exchange_rate"), "2.00")
             po.exchange_rate = rate if rate > 0 else Decimal("1")
             po.save()
-            err = _rebuild_po_lines(request, po, products, po.exchange_rate)
+            was_received = po.status == PurchaseOrder.Status.RECEIVED
+            err = _rebuild_po_lines(request, po, products, po.exchange_rate,
+                                    mark_received=was_received)
             if err:
                 messages.error(request, err)
                 return redirect("po_edit", pk=po.pk)
-            messages.success(request, f"{po.po_no} updated.")
+            if was_received:
+                messages.warning(request, f"{po.po_no} updated. Note: stock already "
+                                 "received and the posted supplier bill were NOT changed "
+                                 "— adjust them in Inventory / Accounting if needed.")
+            else:
+                messages.success(request, f"{po.po_no} updated.")
             if request.POST.get("save_close"):
                 return redirect("po_list")
             return redirect("po_detail", pk=po.pk)
@@ -259,7 +293,50 @@ def po_edit(request, pk):
     return render(request, "inventory/po_form.html", {
         "form": form, "products": products, "categories": categories,
         "po": po, "editing": True, "existing_expenses": existing_expenses,
+        "deps": _po_dependencies(po),
     })
+
+
+@role_required(*INV_ROLES)
+def po_delete(request, pk):
+    """Delete a PO at any status. A draft deletes cleanly. A received PO also
+    reverses its received stock and voids/removes the (unpaid) supplier bill so
+    accounts stay consistent; a PAID bill blocks the delete until it's unpaid."""
+    po = get_object_or_404(PurchaseOrder, pk=pk)
+    deps = _po_dependencies(po)
+    if request.method != "POST":
+        return render(request, "inventory/po_confirm_delete.html", {"po": po, "deps": deps})
+
+    if deps["has_paid_bill"]:
+        messages.error(request, f"{po.po_no} can't be deleted — a payment is recorded "
+                        "against its supplier bill. Reverse the payment in Accounting first.")
+        return redirect("po_detail", pk=pk)
+
+    po_no = po.po_no
+    # Reverse received stock (goods are no longer considered received).
+    if deps["received"]:
+        from catalogue.models import StockMovement
+        for product, qty in deps["received_lines"]:
+            try:
+                product.adjust_stock(-qty, StockMovement.Kind.ADJUST, user=request.user,
+                                     note=f"{po_no} deleted — reverse goods receipt")
+            except Exception:
+                pass
+    # Void + remove the (unpaid) supplier bill so A/P isn't left dangling.
+    try:
+        from accounting.services import _void_entry
+        for b in list(po.bills.all()):
+            if b.journal_id:
+                _void_entry(b.journal)
+            b.delete()
+    except Exception:
+        pass
+
+    po.delete()  # cascades lines + expenses
+    messages.success(request, f"{po_no} deleted."
+                     + (" Received stock reversed and its supplier bill voided."
+                        if deps["received"] else ""))
+    return redirect("po_list")
 
 
 @role_required(*INV_ROLES)

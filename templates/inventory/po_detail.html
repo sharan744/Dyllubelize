@@ -3,9 +3,8 @@
 {% block title %}{{ po.po_no }}{% endblock %}
 {% block page_title %}Purchase Order {{ po.po_no }}{% endblock %}
 {% block topbar_actions %}
-{% if po.status != 'received' and po.status != 'cancelled' %}
 <a href="{% url 'po_edit' po.pk %}" class="btn btn-dark">{% include 'core/_icon.html' with name='edit' %} Edit PO</a>
-{% endif %}
+<a href="{% url 'po_delete' po.pk %}" class="btn btn-ghost" style="color:var(--danger,#c0392b)">Delete</a>
 {% endblock %}
 {% block content %}
 <a href="{% url 'po_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to purchase orders</a>

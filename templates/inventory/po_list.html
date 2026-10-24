@@ -19,7 +19,8 @@
       <td class="num">{{ site.currency_symbol }}{{ po.total_cost|floatformat:2|intcomma }}</td>
       <td>{% if po.status == 'received' %}<span class="pill delivered"><span class="dot"></span>Received</span>{% else %}<span class="pill draft"><span class="dot"></span>Draft</span>{% endif %}</td>
       <td class="right" onclick="event.stopPropagation()">
-        {% if po.status != 'received' and po.status != 'cancelled' %}<a href="{% url 'po_edit' po.pk %}" class="btn btn-ghost btn-sm">Edit</a> {% endif %}
+        <a href="{% url 'po_edit' po.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+        <a href="{% url 'po_delete' po.pk %}" class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</a>
         <a href="{% url 'po_detail' po.pk %}" class="btn btn-soft btn-sm">Open</a></td>
     </tr>
     {% empty %}

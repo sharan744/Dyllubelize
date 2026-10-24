@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Delete {{ po.po_no }}{% endblock %}
+{% block page_title %}Delete Purchase Order {{ po.po_no }}{% endblock %}
+{% block content %}
+<a href="{% url 'po_detail' po.pk %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to PO</a>
+
+<div class="card card-pad" style="max-width:620px">
+  <h3 style="margin:0 0 4px">Delete {{ po.po_no }}?</h3>
+  <p class="small muted" style="margin:0 0 14px">
+    Supplier: <b>{{ po.supplier.name }}</b> · {{ po.lines.count }} line(s) ·
+    {{ site.currency_symbol }}{{ po.grand_total|floatformat:2|intcomma }} · {{ po.get_status_display }}
+  </p>
+
+  {% if deps.has_paid_bill %}
+  <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">
+    <b style="color:var(--danger,#c0392b)">This PO can't be deleted yet.</b>
+    <p class="small" style="margin:6px 0 0">A payment is recorded against its supplier bill
+      ({{ site.currency_symbol }}{{ deps.paid_total|floatformat:2 }} paid). Reverse the payment
+      in Accounting first, then delete.</p>
+  </div>
+  {% elif deps.received %}
+  <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">
+    <b style="color:var(--danger,#c0392b)">⚠ This PO has been received — deleting will also:</b>
+    <ul class="small" style="margin:8px 0 0 18px">
+      <li>Reverse the received stock (remove the units this PO added back out of inventory).</li>
+      {% for b in deps.bills %}
+      <li>Void &amp; remove supplier bill <b>{{ b.number }}</b> from Accounts Payable
+        ({{ site.currency_symbol }}{{ b.total|floatformat:2 }}).</li>
+      {% endfor %}
+    </ul>
+    <p class="small muted" style="margin:8px 0 0">Catalogue cost/selling prices that were updated
+      from this PO are left as they are.</p>
+  </div>
+  {% else %}
+  <p class="small" style="margin:0 0 14px">This is a draft — it has no stock or accounting impact.</p>
+  {% endif %}
+
+  <form method="post" action="{% url 'po_delete' po.pk %}">{% csrf_token %}
+    <div class="flex" style="gap:10px">
+      <a href="{% url 'po_detail' po.pk %}" class="btn btn-ghost">Cancel</a>
+      {% if not deps.has_paid_bill %}
+      <button class="btn btn-primary" style="background:var(--danger,#c0392b);border-color:var(--danger,#c0392b)"
+        onclick="return confirm('Delete {{ po.po_no }}? This cannot be undone.');">
+        Delete {{ po.po_no }}</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}
