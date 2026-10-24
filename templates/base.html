@@ -197,6 +197,54 @@
 {% endif %}
 
 <script type="module" src="{% static 'js/app.js' %}?v=20261019"></script>
+
+<!-- Global double-submit guard: one submit per form, with a working… loader. -->
+<style>
+  @keyframes dsg-spin { to { transform: rotate(360deg); } }
+  .dsg-spin { display:inline-block;width:13px;height:13px;vertical-align:-2px;margin-right:6px;
+    border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+    animation:dsg-spin .6s linear infinite; }
+  .dsg-busy { opacity:.75; cursor:progress !important; pointer-events:none; }
+  form.dsg-wait { cursor:progress; }
+</style>
+<script>
+(function () {
+  function submitControls(form) {
+    return form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]');
+  }
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!(form instanceof HTMLFormElement) || form.dataset.noGuard === '1') return;
+    if (form.dataset.submitting === '1') { e.preventDefault(); return; }  // block the 2nd+ submit
+    form.dataset.submitting = '1';
+    form.classList.add('dsg-wait');
+    // Defer disabling so the clicked button's name/value is still sent with THIS submit.
+    setTimeout(function () {
+      submitControls(form).forEach(function (b) {
+        b.classList.add('dsg-busy');
+        b.disabled = true;
+        if (b.tagName === 'BUTTON') {
+          if (!b.dataset.label) b.dataset.label = b.innerHTML;
+          b.innerHTML = '<span class="dsg-spin"></span>Working…';
+        }
+      });
+    }, 0);
+  }, true);
+
+  // If the user comes back via the browser's Back button (bfcache), re-enable everything.
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    document.querySelectorAll('form[data-submitting="1"]').forEach(function (form) {
+      form.dataset.submitting = '';
+      form.classList.remove('dsg-wait');
+      submitControls(form).forEach(function (b) {
+        b.disabled = false; b.classList.remove('dsg-busy');
+        if (b.dataset.label) b.innerHTML = b.dataset.label;
+      });
+    });
+  });
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>
