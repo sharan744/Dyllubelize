@@ -10,7 +10,8 @@
 {% block content %}
 <a href="{% url 'customer_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to customers</a>
 <div class="detail-grid">
-  <div class="card">
+  <div>
+  <div class="card" style="margin-bottom:18px">
     <div class="card-head"><h3>Order History</h3><div class="spacer"></div><span class="chip">{{ customer.order_count }} order(s)</span></div>
     <div class="table-wrap">
       <table class="tbl">
@@ -18,18 +19,16 @@
         <tbody>
           {% for o in orders %}
           <tr onclick="location.href='{% url 'order_detail' o.pk %}'" style="cursor:pointer">
-            <td><span class="ordno">{{ o.order_no }}</span></td>
+            <td style="white-space:nowrap"><span class="ordno">{{ o.order_no }}</span></td>
             <td class="mono small">{% if o.invoice %}{{ o.invoice.number }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
-            <td class="num">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
-            <td class="small muted">{{ o.created_at|date:"d M Y" }}</td>
+            <td style="white-space:nowrap"><span class="pill {{ o.disp_code }}"><span class="dot"></span>{{ o.disp_label }}</span></td>
+            <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
+            <td class="small muted" style="white-space:nowrap">{{ o.created_at|date:"d M Y" }}</td>
             <td class="num" onclick="event.stopPropagation()" style="white-space:nowrap">
+              {% if o.disp_code == 'completed' or o.invoice %}
               <a href="{% url 'order_invoice' o.pk %}" class="btn btn-ghost btn-sm">{% include 'core/_icon.html' with name='file' %} View</a>
               <a href="{% url 'order_invoice_pdf' o.pk %}" class="btn btn-ghost btn-sm" title="Download PDF">PDF</a>
-              {% if o.invoice and user.is_admin_role %}
-              <a href="{% url 'acc_invoice_edit' o.invoice.pk %}" class="btn btn-ghost btn-sm">Edit</a>
-              <a href="{% url 'acc_invoice_delete' o.invoice.pk %}" class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</a>
-              {% endif %}
+              {% else %}<span class="muted">—</span>{% endif %}
             </td>
           </tr>
           {% empty %}
@@ -39,6 +38,38 @@
       </table>
     </div>
   </div>
+
+  <div class="card">
+    <div class="card-head"><h3>Invoices</h3><div class="spacer"></div><span class="chip">{{ invoices|length }} invoice(s)</span></div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Invoice</th><th>Source</th><th>Date</th><th class="num">Total</th><th>Status</th><th class="num">Actions</th></tr></thead>
+        <tbody>
+          {% for inv in invoices %}
+          <tr>
+            <td style="white-space:nowrap"><a href="{% url 'acc_invoice_detail' inv.pk %}"><b>{{ inv.number }}</b></a></td>
+            <td class="small muted" style="white-space:nowrap">{% if inv.order_id %}Order {{ inv.order.order_no }}{% else %}Manual{% endif %}</td>
+            <td class="small muted" style="white-space:nowrap">{{ inv.date|date:"d M Y" }}</td>
+            <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}{{ inv.total|floatformat:2|intcomma }}</td>
+            <td style="white-space:nowrap"><span class="chip">{{ inv.get_status_display }}</span></td>
+            <td class="num" style="white-space:nowrap">
+              {% if user.is_admin_role %}
+              <a href="{% url 'acc_invoice_edit' inv.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+              <a href="{% url 'acc_invoice_delete' inv.pk %}" class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</a>
+              {% else %}
+              <a href="{% url 'acc_invoice_detail' inv.pk %}" class="btn btn-ghost btn-sm">View</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6"><div class="empty"><p>No invoices for this customer yet.</p></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
   <div class="card card-pad">
     <h3 style="margin-bottom:12px">Details</h3>
     <dl class="kv">

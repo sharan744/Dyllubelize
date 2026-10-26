@@ -61,9 +61,25 @@ def customer_list(request):
 @role_required(Role.SALES, Role.TEAM_LEAD)
 def customer_detail(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
+    from core.models import SiteSetting
+    proc_flow = bool(getattr(SiteSetting.get(), "processing_invoice_flow", False))
+    done = {OrderStatus.READY, OrderStatus.DISPATCHED, OrderStatus.DELIVERED,
+            OrderStatus.COMPLETED}
+    orders = list(customer.orders.select_related("invoice").all()[:20])
+    for o in orders:
+        if proc_flow and o.status in done:
+            o.disp_label, o.disp_code = "Completed", "completed"
+        else:
+            o.disp_label, o.disp_code = o.get_status_display(), o.status
+    # Every invoice billed to this customer — manual ones AND order-raised ones.
+    try:
+        from accounting.models import Invoice
+        invoices = list(Invoice.objects.filter(customer=customer)
+                        .select_related("order").order_by("-date", "-id")[:50])
+    except Exception:
+        invoices = []
     return render(request, "orders/customer_detail.html", {
-        "customer": customer,
-        "orders": customer.orders.select_related("invoice").all()[:20],
+        "customer": customer, "orders": orders, "invoices": invoices,
     })
 
 
@@ -893,6 +909,19 @@ def order_list(request):
 
     paginator = Paginator(orders.order_by("-created_at"), 25)
     page_obj = paginator.get_page(request.GET.get("page"))
+
+    # Simple flow (dispatch/delivery off): show post-processing stages as "Completed".
+    from core.models import SiteSetting
+    proc_flow = bool(getattr(SiteSetting.get(), "processing_invoice_flow", False))
+    done = {OrderStatus.READY, OrderStatus.DISPATCHED, OrderStatus.DELIVERED,
+            OrderStatus.COMPLETED}
+    for o in page_obj:
+        if proc_flow and o.status in done:
+            o.disp_label = "Completed"
+            o.disp_code = "completed"
+        else:
+            o.disp_label = o.get_status_display()
+            o.disp_code = o.status
 
     # querystring for pager links, without the page param
     params = request.GET.copy()

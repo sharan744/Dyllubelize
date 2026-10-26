@@ -39,7 +39,7 @@
       <td><span class="ordno">{{ o.order_no }}</span></td>
       <td>{{ o.customer }}</td>
       <td class="small">{{ o.salesperson.display_name|default:"—" }}</td>
-      <td><span class="pill {{ o.status }}"><span class="dot"></span>{{ o.get_status_display }}</span></td>
+      <td><span class="pill {{ o.disp_code|default:o.status }}"><span class="dot"></span>{{ o.disp_label|default:o.get_status_display }}</span></td>
       <td class="num">{{ o.total_items|floatformat:0 }}</td>
       <td class="num"><b>{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</b></td>
       <td class="small muted">{{ o.created_at|date:"d M Y" }}</td>

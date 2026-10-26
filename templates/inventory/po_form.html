@@ -184,7 +184,7 @@
     try { var v = Function('"use strict";return (' + s + ')')(); return (typeof v === 'number' && isFinite(v)) ? v : NaN; }
     catch (e) { return NaN; }
   }
-  function num(el) { var v = evalExpr(el.value); return isNaN(v) ? 0 : v; }
+  function num(el) { if (!el) return 0; var v = evalExpr(el.value); return isNaN(v) ? 0 : v; }
 
   var tbody = document.querySelector('#po-table tbody');
   var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
@@ -206,6 +206,7 @@
     // goods USD across all rows with a qty
     var goodsUsd = 0;
     rows.forEach(function (tr) {
+      if (!tr.querySelector('.in-qty')) return;   // skip the empty-state row
       var qty = num(tr.querySelector('.in-qty'));
       var usd = num(tr.querySelector('.in-usd'));
       if (qty > 0) goodsUsd += qty * usd;
@@ -223,6 +224,7 @@
 
     var totalLanded = 0;
     rows.forEach(function (tr) {
+      if (!tr.querySelector('.in-qty')) return;   // skip the empty-state row
       var qty = num(tr.querySelector('.in-qty'));
       var usd = num(tr.querySelector('.in-usd'));
       var costEl = tr.querySelector('.in-cost');
