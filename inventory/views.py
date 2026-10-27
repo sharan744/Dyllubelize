@@ -178,9 +178,10 @@ def _rebuild_po_lines(request, po, products, rate, mark_received=False):
     po.expenses.all().delete()
     for p, qty, usd, cost_override, sell in pending:
         landed = cost_override if cost_override is not None else (usd * landed_mult)
+        # Keep 6 decimals so qty × unit_cost sums to the exact landed total.
         PurchaseOrderLine.objects.create(
             po=po, product=p, qty_ordered=qty, unit_cost_usd=usd,
-            unit_cost=Decimal(landed).quantize(Decimal("0.01")), sell_price=sell,
+            unit_cost=Decimal(landed).quantize(Decimal("0.000001")), sell_price=sell,
             qty_received=(qty if mark_received else Decimal("0")),
         )
     for nm, amt, cur in exp_rows:

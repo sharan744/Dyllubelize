@@ -79,8 +79,12 @@ class PurchaseOrder(models.Model):
 
     @property
     def total_cost(self):
-        """Total landed cost (BZD) = sum of each line's final landed cost."""
-        return sum((l.line_cost for l in self.lines.all()), Decimal("0.00"))
+        """Total landed cost (BZD). Summed from each line at FULL unit-cost
+        precision and rounded only once, so it equals goods + expenses exactly
+        (no per-unit rounding drift)."""
+        total = sum((l.qty_ordered * l.unit_cost for l in self.lines.all()),
+                    Decimal("0.00"))
+        return total.quantize(Decimal("0.01"))
 
     # ---- USD → BZD landed-cost model ----
     @property
@@ -153,7 +157,8 @@ class PurchaseOrder(models.Model):
                 # selling price when one was entered on the PO line.
                 fields = []
                 if line.unit_cost:
-                    line.product.cost_price = line.unit_cost
+                    # cost_price is a 2-decimal field — round the landed cost for it.
+                    line.product.cost_price = line.unit_cost.quantize(Decimal("0.01"))
                     fields.append("cost_price")
                 if getattr(line, "sell_price", 0) and line.sell_price > 0:
                     line.product.selling_price = line.sell_price
@@ -183,7 +188,9 @@ class PurchaseOrderLine(models.Model):
     unit_cost_usd = models.DecimalField(max_digits=12, decimal_places=4, default=0)
     # Final landed cost per unit in BZD (after FX + expense ratio). The user may
     # override the computed value directly. Downstream accounting/stock uses this.
-    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Kept at 6 decimals so qty × unit_cost sums to the exact landed total (no
+    # per-unit rounding drift) — matches the client's Excel.
+    unit_cost = models.DecimalField(max_digits=16, decimal_places=6, default=0)
     # Reference selling price (BZD) set by admin/sales — display only, not applied.
     sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 

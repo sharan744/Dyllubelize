@@ -237,6 +237,9 @@
         costEl.value = (usd > 0) ? suggested.toFixed(2) : '';
       }
       var cost = num(costEl);
+      // Total uses the FULL-precision landed cost (not the 2-decimal display),
+      // so it matches the exact goods + expenses — no per-unit rounding drift.
+      var costFull = (costEl.dataset.dirty === '1') ? cost : suggested;
       // margin on cost
       var mCell = tr.querySelector('.cell-margin');
       if (cost > 0 && sell > 0) {
@@ -244,7 +247,7 @@
         mCell.textContent = mp.toFixed(1) + '%';
         mCell.style.color = mp >= 0 ? 'var(--ok)' : 'var(--danger,#c0392b)';
       } else { mCell.textContent = '—'; mCell.style.color = ''; }
-      if (qty > 0) totalLanded += qty * cost;
+      if (qty > 0) totalLanded += qty * costFull;
     });
     document.getElementById('sum-total').textContent = fmt(totalLanded);
   }
