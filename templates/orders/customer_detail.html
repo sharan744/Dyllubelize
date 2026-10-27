@@ -53,11 +53,11 @@
             <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}{{ inv.total|floatformat:2|intcomma }}</td>
             <td style="white-space:nowrap"><span class="chip">{{ inv.get_status_display }}</span></td>
             <td class="num" style="white-space:nowrap">
+              <a href="{% url 'acc_invoice_print' inv.pk %}" class="btn btn-ghost btn-sm">{% include 'core/_icon.html' with name='file' %} View</a>
+              <a href="{% url 'acc_invoice_print_pdf' inv.pk %}" class="btn btn-ghost btn-sm" title="Download PDF">PDF</a>
               {% if user.is_admin_role %}
               <a href="{% url 'acc_invoice_edit' inv.pk %}" class="btn btn-ghost btn-sm">Edit</a>
               <a href="{% url 'acc_invoice_delete' inv.pk %}" class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</a>
-              {% else %}
-              <a href="{% url 'acc_invoice_detail' inv.pk %}" class="btn btn-ghost btn-sm">View</a>
               {% endif %}
             </td>
           </tr>

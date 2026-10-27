@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 
 from core.permissions import role_required
@@ -428,6 +429,64 @@ def invoice_edit(request, pk):
         "products_json": json.dumps(_products_for_picker()),
         "existing_lines_json": json.dumps(existing),
     })
+
+
+def _acc_invoice_print_context(inv):
+    """Build the context for the branded printable invoice (orders/invoice.html)
+    from a standalone accounting Invoice — so manual invoices print like order ones."""
+    from types import SimpleNamespace
+    site = SiteSetting.get()
+    items = []
+    for l in inv.lines.all():
+        items.append({
+            "product_name": l.description, "note": "", "sku": "", "unit": "",
+            "unit_price": l.unit_price, "quantity": l.quantity,
+            "line_total": l.amount, "taxable": l.taxable})
+    subtotal = inv.subtotal
+    tax_rate = inv.tax_percent or Decimal("0")
+    try:
+        terms_days = (inv.due_date - inv.date).days if (inv.due_date and inv.date) else inv.terms_days
+    except Exception:
+        terms_days = inv.terms_days
+    shim = SimpleNamespace(
+        customer=inv.customer, order_no="", discount_percent=Decimal("0"),
+        discount_amount=Decimal("0.00"), is_open=(inv.status not in ("paid", "void")),
+        items=[], remarks=inv.memo or "", salesperson_id=None, status="",
+        subtotal=subtotal, total=subtotal, pk=None, returns=None)
+    return {
+        "order": shim, "site": site, "inv_items": items,
+        "subtotal": subtotal, "discount_amount": Decimal("0.00"),
+        "revised": False, "standalone": True,
+        "net": subtotal, "tax_amount": inv.tax, "grand_total": inv.total,
+        "tax_rate": tax_rate, "tax_label": site.tax_label or "GST", "tax_is_gst": tax_rate > 0,
+        "inv_number": inv.number, "inv_date": inv.date, "due_date": inv.due_date,
+        "amount_paid": inv.amount_paid, "balance": inv.balance,
+        "inv_status": inv.get_status_display(), "inv_status_code": inv.status,
+        "has_invoice": True,
+        "terms_label": f"Net {terms_days}" if terms_days else "Due on receipt",
+        "invoiced_by": inv.created_by.display_name if inv.created_by else "",
+        "checked_by": "", "packed_by": "",
+        "pdf_url": reverse("acc_invoice_print_pdf", args=[inv.pk]),
+        "back_url": reverse("acc_invoice_detail", args=[inv.pk]),
+    }
+
+
+@admin_only
+def acc_invoice_print(request, pk):
+    inv = get_object_or_404(
+        Invoice.objects.select_related("customer", "created_by").prefetch_related("lines"), pk=pk)
+    return render(request, "orders/invoice.html", _acc_invoice_print_context(inv))
+
+
+@admin_only
+def acc_invoice_print_pdf(request, pk):
+    from orders.views import _render_invoice_pdf
+    inv = get_object_or_404(
+        Invoice.objects.select_related("customer", "created_by").prefetch_related("lines"), pk=pk)
+    ctx = _acc_invoice_print_context(inv)
+    resp = HttpResponse(_render_invoice_pdf(ctx), content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="Invoice-{inv.number}.pdf"'
+    return resp
 
 
 @admin_only

@@ -58,16 +58,16 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 {% endblock %}
 {% block page_title %}Invoice{% endblock %}
 {% block topbar_actions %}
-<a href="{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
+<a href="{% if standalone %}{{ pdf_url }}{% else %}{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}{% endif %}" class="btn btn-primary">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
 <button onclick="window.print()" class="btn btn-dark">{% include 'core/_icon.html' with name='print' %} Print</button>
 {% endblock %}
 
 {% block content %}
 <div class="doc-toolbar">
-  <a href="{% url 'order_detail' order.pk %}" class="btn btn-ghost btn-sm">Back to order</a>
-  {% if revised %}<a href="{% url 'order_invoice' order.pk %}" class="btn btn-ghost btn-sm">Original invoice</a>
-  {% elif order.returns.exists %}<a href="{% url 'order_invoice' order.pk %}?revised=1" class="btn btn-ghost btn-sm">Revised (after returns)</a>{% endif %}
-  <a href="{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
+  <a href="{% if standalone %}{{ back_url }}{% else %}{% url 'order_detail' order.pk %}{% endif %}" class="btn btn-ghost btn-sm">{% if standalone %}Back to invoice{% else %}Back to order{% endif %}</a>
+  {% if not standalone %}{% if revised %}<a href="{% url 'order_invoice' order.pk %}" class="btn btn-ghost btn-sm">Original invoice</a>
+  {% elif order.returns.exists %}<a href="{% url 'order_invoice' order.pk %}?revised=1" class="btn btn-ghost btn-sm">Revised (after returns)</a>{% endif %}{% endif %}
+  <a href="{% if standalone %}{{ pdf_url }}{% else %}{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}{% endif %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
   <button onclick="window.print()" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='print' %} Print / Save as PDF</button>
 </div>
 
@@ -92,7 +92,7 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
         <tr><td>Date:</td><td><b>{{ inv_date|date:"d M Y" }}</b></td></tr>
         <tr><td>Due:</td><td><b>{{ due_date|date:"d M Y" }}</b></td></tr>
         <tr><td>Terms:</td><td><b>{{ terms_label }}</b></td></tr>
-        <tr><td>Order:</td><td><b>{{ order.order_no }}</b></td></tr>
+        {% if order.order_no %}<tr><td>Order:</td><td><b>{{ order.order_no }}</b></td></tr>{% endif %}
       </table>
       <span class="inv-status {{ inv_status_code }}">{{ inv_status }}</span>
     </div>

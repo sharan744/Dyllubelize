@@ -40,6 +40,15 @@ class Customer(models.Model):
     def order_count(self):
         return self.orders.count()
 
+    @property
+    def invoice_count(self):
+        """All invoices billed to this customer — manual ones plus order-raised."""
+        try:
+            from accounting.models import Invoice
+            return Invoice.objects.filter(customer=self).count()
+        except Exception:
+            return 0
+
 
 class OrderStatus(models.TextChoices):
     DRAFT = "draft", "Draft"

@@ -12,7 +12,7 @@
 </form>
 <div class="card"><div class="table-wrap">
 <table class="tbl">
-  <thead><tr><th>Customer</th><th>Contact</th><th>Mobile</th><th class="num">Orders</th><th></th></tr></thead>
+  <thead><tr><th>Customer</th><th>Contact</th><th>Mobile</th><th class="num">Orders</th><th class="num">Invoices</th><th></th></tr></thead>
   <tbody>
     {% for c in customers %}
     <tr onclick="location.href='{% url 'customer_detail' c.pk %}'" style="cursor:pointer">
@@ -20,10 +20,11 @@
       <td class="small">{{ c.contact_person|default:"—" }}</td>
       <td>{{ c.mobile }}</td>
       <td class="num">{{ c.order_count }}</td>
+      <td class="num">{{ c.invoice_count }}</td>
       <td class="right"><a href="{% url 'customer_detail' c.pk %}" class="btn btn-soft btn-sm">Open</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="5"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No customers</h3><p>Add your first customer.</p></div></td></tr>
+    <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No customers</h3><p>Add your first customer.</p></div></td></tr>
     {% endfor %}
   </tbody>
 </table>
