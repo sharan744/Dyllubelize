@@ -35,6 +35,7 @@ urlpatterns = [
     path("bills/<int:pk>/", views.bill_detail, name="acc_bill_detail"),
     path("ap-aging/", views.ap_aging, name="acc_ap_aging"),
     path("bills/pay/", views.bill_payment_new, name="acc_bill_payment_new"),
+    path("bill-payments/<int:pk>/reverse/", views.bill_payment_reverse, name="acc_bill_payment_reverse"),
     path("api/open-bills/", views.api_open_bills, name="acc_api_open_bills"),
 
     # Banking

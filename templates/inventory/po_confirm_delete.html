@@ -16,8 +16,11 @@
   <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">
     <b style="color:var(--danger,#c0392b)">This PO can't be deleted yet.</b>
     <p class="small" style="margin:6px 0 0">A payment is recorded against its supplier bill
-      ({{ site.currency_symbol }}{{ deps.paid_total|floatformat:2 }} paid). Reverse the payment
-      in Accounting first, then delete.</p>
+      ({{ site.currency_symbol }}{{ deps.paid_total|floatformat:2 }} paid). Open the bill, reverse
+      the payment, then come back and delete.</p>
+    {% for b in po.bills.all %}
+    <a href="{% url 'acc_bill_detail' b.pk %}" class="btn btn-dark btn-sm" style="margin-top:8px">Open bill {{ b.number }} to reverse payment</a>
+    {% endfor %}
   </div>
   {% elif deps.received %}
   <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">

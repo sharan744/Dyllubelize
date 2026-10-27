@@ -685,6 +685,23 @@ def bill_detail(request, pk):
 
 
 @admin_only
+def bill_payment_reverse(request, pk):
+    """Reverse a supplier bill payment so a bill (and its PO) can be deleted."""
+    bp = get_object_or_404(BillPayment, pk=pk)
+    if request.method != "POST":
+        return redirect("acc_bill_list")
+    number = bp.number
+    back = request.POST.get("next") or "/accounting/app/bills/"
+    try:
+        services.void_bill_payment(bp, user=request.user)
+        messages.success(request, f"Payment {number} reversed — the bill balance is restored. "
+                         "You can now delete the PO if needed.")
+    except Exception as e:
+        messages.error(request, f"Could not reverse payment {number}: {e}")
+    return redirect(back)
+
+
+@admin_only
 def ap_aging(request):
     bills = [b for b in Bill.objects.exclude(
         status__in=[DocStatus.DRAFT, DocStatus.VOID]).select_related("supplier")

@@ -260,6 +260,18 @@ def post_bill_payment(bp, user=None):
     return je
 
 
+@transaction.atomic
+def void_bill_payment(bp, user=None):
+    """Reverse a supplier bill payment: remove its ledger entry and the payment
+    record, then restore the balance on the bill(s) it was applied to."""
+    bills = [a.bill for a in bp.applications.all()]
+    _void_entry(bp.journal)
+    bp.journal = None
+    bp.delete()               # cascades its applications
+    for b in bills:
+        b.recalc_status()
+
+
 # ============================================================
 # Inventory ↔ Accounts linkage (QuickBooks-style perpetual inventory)
 #
