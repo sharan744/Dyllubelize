@@ -715,7 +715,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/accounting/views.py</url>
-          <line>997</line>
+          <line>1014</line>
         </line-breakpoint>
       </breakpoints>
       <option name="time" value="2" />

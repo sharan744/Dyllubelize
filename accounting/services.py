@@ -20,7 +20,8 @@ Z = Decimal("0.00")
 # --- Standard account codes the engine relies on -----------------------------
 CODES = {
     "AR": "1200",           # Accounts Receivable
-    "AP": "2000",           # Accounts Payable
+    "AP": "2000",           # Accounts Payable (to suppliers — goods only)
+    "LANDED_EXP": "2100",   # Accrued landed-cost expenses (freight/duty, not the supplier)
     "TAX": "2200",          # Sales tax / GST payable
     "SALES": "4000",        # Sales income
     "RETURNS": "4900",      # Sales returns & allowances (contra-income)
@@ -40,6 +41,7 @@ DEFAULT_CHART = [
     ("1300", "Inventory Asset", AccountType.ASSET, False, None),
     ("1500", "Property & Equipment", AccountType.ASSET, False, None),
     ("2000", "Accounts Payable", AccountType.LIABILITY, False, None),
+    ("2100", "Accrued Landed Costs (Freight/Duty)", AccountType.LIABILITY, False, None),
     ("2200", "Sales Tax / GST Payable", AccountType.LIABILITY, False, None),
     ("2400", "Payroll Liabilities", AccountType.LIABILITY, False, None),
     ("3000", "Owner's Capital", AccountType.EQUITY, False, None),
@@ -301,6 +303,7 @@ def bill_from_po(po, user=None, post=True):
     # value and capitalize the expenses as separate Inventory lines — the two
     # together equal the landed cost, with no double counting.
     uses_landed = any(q(getattr(l, "unit_cost_usd", 0)) > 0 for l in po.lines.all())
+    # --- Supplier bill = GOODS ONLY (that's all the supplier is owed). ---
     for l in po.lines.select_related("product").all():
         qty = q(l.qty_received or l.qty_ordered)
         if uses_landed and q(getattr(l, "unit_cost_usd", 0)) > 0:
@@ -314,25 +317,59 @@ def bill_from_po(po, user=None, post=True):
         BillLine.objects.create(
             bill=bill, account=inv_asset,
             description=f"{name} × {qty:g} @ {unit}", amount=amt)
-    # PO expenses (freight, duty, insurance, …). Capitalize into Inventory when
-    # the landed model is used (they belong in the goods' cost); otherwise book
-    # them to Freight & Delivery as before. USD expenses convert at the PO rate.
-    exp_acct = inv_asset if uses_landed else (acc(CODES.get("FREIGHT")) or inv_asset)
+    if not bill.lines.exists():
+        bill.delete()
+        return None
+    if post:
+        post_bill(bill, user=user)             # Dr Inventory Asset ; Cr A/P (goods only)
+
+    # --- PO expenses (freight, duty, insurance …) are NOT the supplier's; they are
+    # company costs owed to other parties. Capitalize them into Inventory so stock
+    # stays at landed cost, with the other side in a separate "Accrued Landed Costs"
+    # liability — recorded against this PO, not on the supplier bill. ---
+    _post_po_expenses(po, bill, user=user)
+    return bill
+
+
+def _po_expense_entries(po):
+    """Journal entries that carry a PO's landed-cost expenses (for void/cleanup)."""
+    return JournalEntry.objects.filter(
+        source=JournalSource.BILL, source_id=po.id,
+        reference=f"{po.po_no}-EXP")
+
+
+@transaction.atomic
+def _post_po_expenses(po, bill=None, user=None):
+    """Book the PO's expenses: Dr Inventory Asset ; Cr Accrued Landed Costs.
+    Idempotent — re-voids any previous expense entry for this PO first."""
+    for je in list(_po_expense_entries(po)):
+        _void_entry(je)
+    inv_asset = acc(CODES["INVENTORY"])
+    accrued = acc(CODES["LANDED_EXP"])
+    if not inv_asset or not accrued:
+        return None
+    rate = getattr(po, "exchange_rate", None) or Decimal("1")
+    lines, total = [], Z
     for e in po.expenses.all():
         amt = q(e.amount_in_bzd(rate) if hasattr(e, "amount_in_bzd") else e.amount)
         if amt <= 0:
             continue
         cur = getattr(e, "currency", "BZD")
-        label = f"Expense — {e.name}" + (f" ({e.amount} {cur} @ {rate})" if cur == "USD" else "")
-        BillLine.objects.create(
-            bill=bill, account=exp_acct,
-            description=label, amount=amt)
-    if not bill.lines.exists():
-        bill.delete()
+        label = f"{e.name}" + (f" ({e.amount} {cur} @ {rate})" if cur == "USD" else "")
+        lines.append((inv_asset, amt, Z, label, None, po.supplier))
+        total += amt
+    if total <= 0:
         return None
-    if post:
-        post_bill(bill, user=user)             # Dr Inventory Asset ; Cr A/P
-    return bill
+    lines.append((accrued, Z, total, f"Landed-cost expenses — {po.po_no}", None, None))
+    return _entry(timezone.localdate(), f"Landed-cost expenses — {po.po_no}",
+                  JournalSource.BILL, po.id, user, lines, reference=f"{po.po_no}-EXP")
+
+
+@transaction.atomic
+def void_po_expenses(po, user=None):
+    """Reverse a PO's landed-cost expense entry (used when deleting the PO)."""
+    for je in list(_po_expense_entries(po)):
+        _void_entry(je)
 
 
 @transaction.atomic

@@ -323,9 +323,11 @@ def po_delete(request, pk):
                                      note=f"{po_no} deleted — reverse goods receipt")
             except Exception:
                 pass
-    # Void + remove the (unpaid) supplier bill so A/P isn't left dangling.
+    # Void + remove the (unpaid) supplier bill so A/P isn't left dangling,
+    # and reverse the separate landed-cost expense entry for this PO.
     try:
-        from accounting.services import _void_entry
+        from accounting.services import _void_entry, void_po_expenses
+        void_po_expenses(po, user=request.user)
         for b in list(po.bills.all()):
             if b.journal_id:
                 _void_entry(b.journal)
