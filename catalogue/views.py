@@ -135,3 +135,26 @@ def product_toggle(request, pk):
     messages.info(request, f"Product “{product.name}” "
                            f"{'activated' if product.is_active else 'deactivated'}.")
     return redirect("product_list")
+
+
+@role_required()
+def product_delete(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    if request.method != "POST":
+        return redirect("product_list")
+    name = product.name
+    # Don't wipe history: block delete when it's used in any order or PO.
+    from orders.models import OrderItem
+    from inventory.models import PurchaseOrderLine
+    used = (OrderItem.objects.filter(product=product).exists()
+            or PurchaseOrderLine.objects.filter(product=product).exists())
+    if used:
+        messages.error(request, f"“{name}” can't be deleted — it's used in orders "
+                        "or purchase orders. Turn it Off to hide it instead.")
+        return redirect("product_list")
+    try:
+        product.delete()
+        messages.success(request, f"Product “{name}” deleted.")
+    except Exception as e:
+        messages.error(request, f"Could not delete “{name}”: {e}")
+    return redirect("product_list")

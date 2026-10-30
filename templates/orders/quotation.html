@@ -137,7 +137,7 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
   <table class="doc-tbl">
     <thead>
       <tr>
-        <th style="width:38%">Product</th><th>SKU</th><th>Unit</th>
+        <th style="width:52%">Product</th>
         <th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Amount</th>
       </tr>
     </thead>
@@ -145,8 +145,6 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
       {% for i in order.items.all %}
       <tr>
         <td>{{ i.product_name }}{% if i.note %}<br><span style="color:#6b6577;font-size:.85em">{{ i.note }}</span>{% endif %}</td>
-        <td>{{ i.sku }}</td>
-        <td>{{ i.unit }}</td>
         <td class="num">{% if can_edit %}<span class="qb-sym">{{ site.currency_symbol }}</span><input class="qb-cell" data-line-id="{{ i.pk }}" data-field="price" value="{{ i.unit_price|floatformat:2 }}" inputmode="decimal">{% else %}{{ site.currency_symbol }}{{ i.unit_price|floatformat:2|intcomma }}{% endif %}</td>
         <td class="num">{% if can_edit %}<input class="qb-cell qb-qty" data-line-id="{{ i.pk }}" data-field="qty" value="{{ i.quantity|floatformat:0 }}" inputmode="decimal">{% else %}{{ i.quantity|floatformat:0 }}{% endif %}</td>
         <td class="num">{% if i.line_discount_percent %}{{ i.line_discount_percent|floatformat:0 }}%{% else %}—{% endif %}</td>

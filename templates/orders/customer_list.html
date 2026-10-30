@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Customers{% endblock %}
 {% block page_title %}Customers{% endblock %}
 {% block topbar_actions %}
@@ -12,21 +13,37 @@
 </form>
 <div class="card"><div class="table-wrap">
 <table class="tbl">
-  <thead><tr><th>Customer</th><th>Contact</th><th>Mobile</th><th class="num">Orders</th><th class="num">Invoices</th><th></th></tr></thead>
+  <thead><tr><th>Customer</th><th>Contact</th><th>Mobile</th><th class="num">Orders</th><th class="num">Invoices</th><th class="num">Invoice Total</th><th></th></tr></thead>
   <tbody>
     {% for c in customers %}
     <tr onclick="location.href='{% url 'customer_detail' c.pk %}'" style="cursor:pointer">
       <td><b>{{ c.company_name|default:c.name }}</b>{% if c.company_name %}<div class="small muted">{{ c.name }}</div>{% endif %}</td>
       <td class="small">{{ c.contact_person|default:"—" }}</td>
       <td>{{ c.mobile }}</td>
-      <td class="num">{{ c.order_count }}</td>
-      <td class="num">{{ c.invoice_count }}</td>
-      <td class="right"><a href="{% url 'customer_detail' c.pk %}" class="btn btn-soft btn-sm">Open</a></td>
+      <td class="num">{{ c.oc }}</td>
+      <td class="num">{{ c.ic }}</td>
+      <td class="num">{{ site.currency_symbol }}{{ c.inv_total|floatformat:2|intcomma }}</td>
+      <td class="right" onclick="event.stopPropagation()" style="white-space:nowrap">
+        <a href="{% url 'customer_detail' c.pk %}" class="btn btn-soft btn-sm">Open</a>
+        {% if c.oc == 0 and c.ic == 0 %}
+        <form method="post" action="{% url 'customer_delete' c.pk %}" style="display:inline"
+              onsubmit="return confirm('Delete “{{ c.label|escapejs }}”? They have no orders or invoices.');">
+          {% csrf_token %}<button class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</button>
+        </form>
+        {% endif %}
+      </td>
     </tr>
     {% empty %}
-    <tr><td colspan="6"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No customers</h3><p>Add your first customer.</p></div></td></tr>
+    <tr><td colspan="7"><div class="empty">{% include 'core/_icon.html' with name='users' %}<h3>No customers</h3><p>Add your first customer.</p></div></td></tr>
     {% endfor %}
   </tbody>
+  {% if customers %}
+  <tfoot><tr style="border-top:2px solid var(--line)">
+    <td colspan="5" class="num"><b>Total invoiced (all customers)</b></td>
+    <td class="num"><b>{{ site.currency_symbol }}{{ grand_total|floatformat:2|intcomma }}</b></td>
+    <td></td>
+  </tr></tfoot>
+  {% endif %}
 </table>
 </div></div>
 {% endblock %}

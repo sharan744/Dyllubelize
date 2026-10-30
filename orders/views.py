@@ -49,13 +49,46 @@ def brand_logo_flowable(height_mm=16):
 # ============================================================
 @role_required(Role.SALES, Role.TEAM_LEAD)
 def customer_list(request):
+    from decimal import Decimal
     q = request.GET.get("q", "").strip()
-    customers = Customer.objects.all()
+    customers = list(Customer.objects.all())
     if q:
-        customers = customers.filter(
-            Q(name__icontains=q) | Q(company_name__icontains=q) | Q(mobile__icontains=q)
-        )
-    return render(request, "orders/customer_list.html", {"customers": customers, "q": q})
+        customers = list(Customer.objects.filter(
+            Q(name__icontains=q) | Q(company_name__icontains=q) | Q(mobile__icontains=q)))
+    # Invoice totals per customer (manual + order-raised) + grand total.
+    inv_totals = {}
+    grand_total = Decimal("0.00")
+    try:
+        from accounting.models import Invoice
+        for inv in Invoice.objects.exclude(status="void").select_related("customer"):
+            t = inv.total
+            inv_totals[inv.customer_id] = inv_totals.get(inv.customer_id, Decimal("0.00")) + t
+            grand_total += t
+    except Exception:
+        pass
+    for c in customers:
+        c.inv_total = inv_totals.get(c.id, Decimal("0.00"))
+        c.oc = c.order_count
+        c.ic = c.invoice_count
+    return render(request, "orders/customer_list.html", {
+        "customers": customers, "q": q, "grand_total": grand_total})
+
+
+@role_required(Role.SALES, Role.TEAM_LEAD)
+def customer_delete(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    if request.method != "POST":
+        return redirect("customer_detail", pk=pk)
+    if customer.order_count or customer.invoice_count:
+        messages.error(request, f"“{customer.label}” has orders or invoices — can't be deleted.")
+        return redirect("customer_list")
+    name = customer.label
+    try:
+        customer.delete()
+        messages.success(request, f"Customer “{name}” deleted.")
+    except Exception as e:
+        messages.error(request, f"Could not delete “{name}”: {e}")
+    return redirect("customer_list")
 
 
 @role_required(Role.SALES, Role.TEAM_LEAD)
@@ -306,6 +339,16 @@ def order_detail(request, pk):
     proc_edit = (proc_flow and order.status == OrderStatus.PROCESSING
                  and (request.user.is_processing or request.user.is_admin_role)
                  and not getattr(order, "invoice", None))
+    # Line-editing (qty/price/remove/add) — admin may correct any order.
+    line_edit = _can_edit_lines(request.user, order)
+    add_products = []
+    if line_edit:
+        add_products = [
+            {"id": p.id, "name": p.name, "sku": p.sku, "price": f"{p.selling_price:.2f}",
+             "unit": p.get_unit_display()}
+            for p in Product.objects.filter(is_active=True).only(
+                "name", "sku", "selling_price", "unit").order_by("name")]
+    import json as _json
     return render(request, "orders/order_detail.html", {
         "order": order,
         "pipeline": pipeline,
@@ -314,6 +357,8 @@ def order_detail(request, pk):
         "delivery": getattr(order, "delivery", None),
         "proc_flow": proc_flow,
         "proc_edit": proc_edit,
+        "line_edit": line_edit,
+        "add_products_json": _json.dumps(add_products),
     })
 
 
@@ -668,18 +713,18 @@ def _render_invoice_pdf(ctx):
     cellC = ParagraphStyle("cellC", parent=cellL, alignment=1)  # centred
     _taxlbl = ctx["tax_label"] if ctx["tax_is_gst"] else ""
     rows = [[Paragraph("<b>Product</b>", cellL),
-             Paragraph("<b>Unit price</b>", cellR), Paragraph("<b>Qty</b>", cellR),
+             Paragraph("<b>Qty</b>", cellR), Paragraph("<b>Unit price</b>", cellR),
              Paragraph("<b>Tax</b>", cellC), Paragraph("<b>Amount</b>", cellR)]]
     for i in ctx["inv_items"]:
         tax_cell = _taxlbl if (ctx["tax_is_gst"] and i.get("taxable", True)) else "—"
         rows.append([
             Paragraph(i["product_name"], cellL),
-            Paragraph(money(i["unit_price"]), cellR),
             Paragraph(f"{i['quantity']:.0f}", cellR),
+            Paragraph(money(i["unit_price"]), cellR),
             Paragraph(tax_cell, cellC),
             Paragraph(money(i["line_total"]), cellR),
         ])
-    items = Table(rows, colWidths=[86 * mm, 28 * mm, 14 * mm, 18 * mm, 26 * mm], repeatRows=1)
+    items = Table(rows, colWidths=[86 * mm, 14 * mm, 28 * mm, 18 * mm, 26 * mm], repeatRows=1)
     items.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -774,9 +819,11 @@ def _can_edit_lines(user, order):
     Salesperson (owner) and admin as before; plus the Processing team while the
     order is in Processing and the 'processing creates the invoice' flow is on."""
     from core.models import SiteSetting
+    if user.is_admin_role:
+        return True   # admin may correct any order's lines
     if not order.is_open:
         return False
-    if user.is_admin_role or order.salesperson_id == user.id:
+    if order.salesperson_id == user.id:
         return True
     if (getattr(user, "is_processing", False)
             and order.status == OrderStatus.PROCESSING
@@ -823,6 +870,42 @@ def order_line_remove(request, pk):
     data = {"ok": True}
     data.update(_order_totals_json(order))
     return JsonResponse(data)
+
+
+@role_required(*ALL_STAFF)
+def order_line_add(request, pk):
+    """Add a product line to an existing order (missing-item fix). If the order's
+    stock is already committed, this line's stock is deducted too."""
+    order = get_object_or_404(Order, pk=pk)
+    if not _can_edit_lines(request.user, order):
+        return JsonResponse({"ok": False, "error": "You can't edit this order."}, status=403)
+    product = Product.objects.filter(pk=request.POST.get("product_id"), is_active=True).first()
+    if not product:
+        return JsonResponse({"ok": False, "error": "Pick a valid product."}, status=400)
+    qty = _dec_q(request.POST.get("qty"), "1")
+    if qty <= 0:
+        qty = Decimal("1")
+    it = OrderItem.objects.create(
+        order=order, product=product, product_name=product.name, sku=product.sku,
+        unit=product.get_unit_display(), unit_price=product.selling_price,
+        unit_cost=product.cost_price or Decimal("0"), quantity=qty)
+    try:
+        if order.stock_committed and product.track_stock:
+            from catalogue.models import StockMovement
+            product.adjust_stock(-qty, StockMovement.Kind.ORDER_OUT, order=order,
+                                 user=request.user, note=f"Order {order.order_no} — line added")
+    except Exception:
+        pass
+    data = {"ok": True, "line_id": it.pk}
+    data.update(_order_totals_json(order))
+    return JsonResponse(data)
+
+
+def _dec_q(v, default="0"):
+    try:
+        return Decimal(str(v if v not in (None, "") else default))
+    except (InvalidOperation, ValueError):
+        return Decimal(default)
 
 
 @role_required(*ALL_STAFF)
@@ -955,7 +1038,7 @@ def order_review_action(request, pk):
     if request.method != "POST":
         return redirect("order_detail", pk=pk)
 
-    action = request.POST.get("action")vd
+    action = request.POST.get("action")
     note = request.POST.get("note", "").strip()
     if note:
         order.team_lead_remarks = note

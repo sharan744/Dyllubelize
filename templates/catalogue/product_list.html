@@ -26,9 +26,13 @@
       <td class="num">{{ site.currency_symbol }}{{ p.selling_price|floatformat:2|intcomma }}</td>
       <td class="num">{% if p.track_stock %}{{ p.stock_qty|floatformat:0 }}{% else %}<span class="muted">—</span>{% endif %}</td>
       <td>{% if p.is_active %}<span class="pill dispatched"><span class="dot"></span>Active</span>{% else %}<span class="pill draft"><span class="dot"></span>Inactive</span>{% endif %}</td>
-      <td class="right">
+      <td class="right" style="white-space:nowrap">
         <a href="{% url 'product_edit' p.pk %}" class="btn btn-soft btn-sm">Edit</a>
         <a href="{% url 'product_toggle' p.pk %}" class="btn btn-ghost btn-sm">{% if p.is_active %}Off{% else %}On{% endif %}</a>
+        <form method="post" action="{% url 'product_delete' p.pk %}" style="display:inline"
+              onsubmit="return confirm('Delete “{{ p.name|escapejs }}”? This cannot be undone.');">
+          {% csrf_token %}<button class="btn btn-ghost btn-sm" style="color:var(--danger,#c0392b)">Delete</button>
+        </form>
       </td>
     </tr>
     {% empty %}

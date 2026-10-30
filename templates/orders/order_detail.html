@@ -44,18 +44,18 @@
   <div>
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>Items</h3><div class="spacer"></div>
-        {% if proc_edit %}<span class="chip" style="background:var(--s-proc,#6c5ce7);color:#fff">Processing — editable</span>{% endif %}
+        {% if line_edit %}<span class="chip" style="background:var(--s-proc,#6c5ce7);color:#fff">Editable</span>{% endif %}
         <span class="chip">{{ order.distinct_items }} line(s) · {{ order.total_items|floatformat:0 }} units</span></div>
-      {% if proc_edit %}<div class="sub small muted" style="padding:0 14px 8px">Edit a <b>Qty</b> or <b>Unit Price</b> (you can type a calc like <b>12*4</b>), or remove an out-of-stock line, then create the invoice below.</div>{% endif %}
+      {% if line_edit %}<div class="sub small muted" style="padding:0 14px 8px">Click a <b>Qty</b> or <b>Unit Price</b> and type a number (or a calc like <b>12*4</b>), remove a line with ✕, or add a missing item below.</div>{% endif %}
       <div class="table-wrap">
         <table class="tbl" id="proc-table">
-          <thead><tr><th>Product</th><th>SKU</th><th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Total</th>{% if proc_edit %}<th></th>{% endif %}</tr></thead>
+          <thead><tr><th>Product</th><th>SKU</th><th class="num">Unit Price</th><th class="num">Qty</th><th class="num">Disc</th><th class="num">Total</th>{% if line_edit %}<th></th>{% endif %}</tr></thead>
           <tbody>
             {% for i in order.items.all %}
             <tr data-row="{{ i.pk }}">
               <td><b>{{ i.product_name }}</b>{% if i.note %}<div class="small muted">{{ i.note }}</div>{% endif %}</td>
               <td><span class="mono">{{ i.sku }}</span></td>
-              {% if proc_edit %}
+              {% if line_edit %}
               <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}<input class="qb-cell" data-line-id="{{ i.pk }}" data-field="price" value="{{ i.unit_price|floatformat:2 }}" inputmode="decimal" style="width:78px;text-align:right"></td>
               <td class="num"><input class="qb-cell qb-qty" data-line-id="{{ i.pk }}" data-field="qty" value="{{ i.quantity|floatformat:0 }}" inputmode="decimal" style="width:54px;text-align:right"></td>
               {% else %}
@@ -64,22 +64,32 @@
               {% endif %}
               <td class="num">{{ i.line_discount_percent|floatformat:0 }}%</td>
               <td class="num"><b>{{ site.currency_symbol }}<span id="qb-amt-{{ i.pk }}">{{ i.line_total|floatformat:2|intcomma }}</span></b></td>
-              {% if proc_edit %}<td class="num"><button type="button" class="btn btn-ghost btn-sm proc-del" data-line-id="{{ i.pk }}" title="Remove line">&times;</button></td>{% endif %}
+              {% if line_edit %}<td class="num"><button type="button" class="btn btn-ghost btn-sm proc-del" data-line-id="{{ i.pk }}" title="Remove line">&times;</button></td>{% endif %}
             </tr>
             {% endfor %}
           </tbody>
           <tfoot>
-            <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}<span id="qb-subtotal">{{ order.subtotal|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>
-            {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}<span id="qb-discount">{{ order.discount_amount|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>{% endif %}
+            <tr><td colspan="5" class="num muted">Subtotal</td><td class="num">{{ site.currency_symbol }}<span id="qb-subtotal">{{ order.subtotal|floatformat:2|intcomma }}</span></td>{% if line_edit %}<td></td>{% endif %}</tr>
+            {% if order.discount_percent %}<tr><td colspan="5" class="num muted">Discount ({{ order.discount_percent|floatformat:0 }}%)</td><td class="num">−{{ site.currency_symbol }}<span id="qb-discount">{{ order.discount_amount|floatformat:2|intcomma }}</span></td>{% if line_edit %}<td></td>{% endif %}</tr>{% endif %}
             {% if site.tax_enabled and site.tax_percent %}
-            <tr><td colspan="5" class="num muted">{{ order.tax_label }} ({{ order.tax_percent_effective|floatformat:1 }}%)</td><td class="num">{{ site.currency_symbol }}<span id="qb-tax">{{ order.tax_amount|floatformat:2|intcomma }}</span></td>{% if proc_edit %}<td></td>{% endif %}</tr>
-            <tr><td colspan="5" class="num"><b>Total incl. {{ order.tax_label }}</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total_with_tax|floatformat:2|intcomma }}</span></b></td>{% if proc_edit %}<td></td>{% endif %}</tr>
+            <tr><td colspan="5" class="num muted">{{ order.tax_label }} ({{ order.tax_percent_effective|floatformat:1 }}%)</td><td class="num">{{ site.currency_symbol }}<span id="qb-tax">{{ order.tax_amount|floatformat:2|intcomma }}</span></td>{% if line_edit %}<td></td>{% endif %}</tr>
+            <tr><td colspan="5" class="num"><b>Total incl. {{ order.tax_label }}</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total_with_tax|floatformat:2|intcomma }}</span></b></td>{% if line_edit %}<td></td>{% endif %}</tr>
             {% else %}
-            <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total|floatformat:2|intcomma }}</span></b></td>{% if proc_edit %}<td></td>{% endif %}</tr>
+            <tr><td colspan="5" class="num"><b>Total</b></td><td class="num"><b style="font-size:1.1rem">{{ site.currency_symbol }}<span id="qb-grand">{{ order.total|floatformat:2|intcomma }}</span></b></td>{% if line_edit %}<td></td>{% endif %}</tr>
             {% endif %}
           </tfoot>
         </table>
       </div>
+      {% if line_edit %}
+      <div class="card-pad" style="padding-top:0">
+        <div style="position:relative;max-width:440px">
+          <input type="text" id="oi-search" autocomplete="off" placeholder="Add a missing item — search a product by name or SKU…" style="width:100%">
+          <div id="oi-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);
+               z-index:50;background:var(--paper,#fff);border:1px solid var(--line,#d9d2c4);border-radius:10px;
+               box-shadow:0 10px 30px rgba(0,0,0,.15);max-height:240px;overflow:auto"></div>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
     {% if order.remarks %}
@@ -250,7 +260,7 @@
   </div>
 </div>
 
-{% if proc_edit %}
+{% if line_edit %}
 <script>
 (function(){
   const UP  = "{% url 'order_line_update' order.pk %}";
@@ -294,6 +304,33 @@
       }).catch(err=>alert(err.message));
     });
   });
+
+  // --- Add a missing item from the catalogue ---
+  var ADD = "{% url 'order_line_add' order.pk %}";
+  var PRODUCTS = {{ add_products_json|safe }};
+  var oiSearch = document.getElementById('oi-search');
+  var oiResults = document.getElementById('oi-results');
+  function oiEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function oiRender(){
+    var term=(oiSearch.value||'').trim().toLowerCase();
+    if(term===''){ oiResults.style.display='none'; oiResults.innerHTML=''; return; }
+    var m=PRODUCTS.filter(function(p){ return (p.name+' '+p.sku).toLowerCase().indexOf(term)!==-1; }).slice(0,25);
+    if(!m.length){ oiResults.innerHTML='<div class="small muted" style="padding:10px">No matching products.</div>'; oiResults.style.display='block'; return; }
+    oiResults.innerHTML=m.map(function(p){ return '<div class="oi-res" data-id="'+p.id+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid var(--line-2,#eee);cursor:pointer"><div><b>'+oiEsc(p.name)+'</b> <span class="mono small muted">'+oiEsc(p.sku)+'</span></div><button type="button" class="btn btn-dark btn-sm">Add</button></div>'; }).join('');
+    oiResults.style.display='block';
+  }
+  if(oiSearch){
+    oiSearch.addEventListener('input',oiRender);
+    oiSearch.addEventListener('focus',oiRender);
+    oiResults.addEventListener('click',function(e){
+      var it=e.target.closest('.oi-res'); if(!it) return;
+      fetch(ADD,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+        body:new URLSearchParams({product_id:it.dataset.id,qty:'1'}).toString()})
+      .then(r=>r.json().then(d=>({ok:r.ok,d}))).then(function(res){ if(!res.ok||!res.d.ok) throw new Error(res.d.error||'Could not add.'); location.reload(); })
+      .catch(function(err){ alert(err.message); });
+    });
+    document.addEventListener('click',function(e){ if(!oiResults.contains(e.target)&&e.target!==oiSearch) oiResults.style.display='none'; });
+  }
 })();
 </script>
 {% endif %}
