@@ -955,7 +955,7 @@ def order_review_action(request, pk):
     if request.method != "POST":
         return redirect("order_detail", pk=pk)
 
-    action = request.POST.get("action")
+    action = request.POST.get("action")vd
     note = request.POST.get("note", "").strip()
     if note:
         order.team_lead_remarks = note
