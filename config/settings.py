@@ -42,8 +42,13 @@ def env_bool(key, default=False):
 # Core
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("SECRET_KEY", "BkNaS43up1TbE3pJpgcctWMNuBHXpj4oc1gAA73M5C-V7HQKrRK7_sxznHG8cySFmvY")
-DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = env("ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0").split(",")
+DEBUG = False
+
+ALLOWED_HOSTS = [
+    '64.227.167.71',
+    'localhost',
+    '127.0.0.1',
+]
 
 # Needed in production (DEBUG=False behind HTTPS): the domains allowed to POST
 # forms, and telling Django it is served over HTTPS by the Nginx proxy.
