@@ -46,13 +46,20 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     '64.227.167.71',
+    'dyllubelize.com',
+    'www.dyllubelize.com',
     'localhost',
     '127.0.0.1',
 ]
 
 # Needed in production (DEBUG=False behind HTTPS): the domains allowed to POST
 # forms, and telling Django it is served over HTTPS by the Nginx proxy.
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in env("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = [
+    "http://dyllubelize.com",
+    "http://www.dyllubelize.com",
+    "https://dyllubelize.com",
+    "https://www.dyllubelize.com",
+]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
