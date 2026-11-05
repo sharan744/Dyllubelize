@@ -2,6 +2,7 @@
 {% block title %}Users{% endblock %}
 {% block page_title %}Users &amp; Roles{% endblock %}
 {% block topbar_actions %}
+<a href="{% url 'user_access' %}" class="btn btn-soft">{% include 'core/_icon.html' with name='shield' %} Manage Access</a>
 <a href="{% url 'user_create' %}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} Add User</a>
 {% endblock %}
 {% block content %}

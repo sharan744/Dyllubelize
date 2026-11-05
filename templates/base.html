@@ -106,8 +106,11 @@
       <a href="{% url 'product_list' %}" class="{% if 'products' in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='box' %} Products
       </a>
-      <a href="{% url 'user_list' %}" class="{% if 'users' in request.path %}active{% endif %}">
+      <a href="{% url 'user_list' %}" class="{% if 'users' in request.path and 'access' not in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='users' %} Users
+      </a>
+      <a href="{% url 'user_access' %}" class="{% if 'users/access' in request.path %}active{% endif %}">
+        {% include 'core/_icon.html' with name='shield' %} User Access
       </a>
       <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
         {% include 'core/_icon.html' with name='file' %} Reports
@@ -144,6 +147,30 @@
       <a href="{% url 'acc_report_pnl' %}" class="{% if '/reports/pnl' in request.path or 'balance-sheet' in request.path or 'trial-balance' in request.path or '/reports/sales' in request.path or 'budgets' in request.path %}active{% endif %}">
         {% include 'core/_icon.html' with name='chart' %} Financials
       </a>
+      {% endif %}
+
+      {% if not user.is_admin_role %}
+      {% if access.create_po or access.apply_payments or access.create_invoices %}
+      <div class="nav-label">Accounts</div>
+      {% if access.create_po %}
+      <a href="{% url 'po_create' %}" class="{% if request.resolver_match.url_name == 'po_create' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='file' %} New Purchase Order
+      </a>
+      {% endif %}
+      {% if access.create_invoices %}
+      <a href="{% url 'acc_invoice_new' %}" class="{% if request.resolver_match.url_name == 'acc_invoice_new' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='file' %} New Invoice
+      </a>
+      {% endif %}
+      {% if access.apply_payments %}
+      <a href="{% url 'acc_payment_new' %}" class="{% if request.resolver_match.url_name == 'acc_payment_new' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='money' %} Apply Customer Payment
+      </a>
+      <a href="{% url 'acc_bill_payment_new' %}" class="{% if request.resolver_match.url_name == 'acc_bill_payment_new' %}active{% endif %}">
+        {% include 'core/_icon.html' with name='truck' %} Apply Supplier Payment
+      </a>
+      {% endif %}
+      {% endif %}
       {% endif %}
     </nav>
 

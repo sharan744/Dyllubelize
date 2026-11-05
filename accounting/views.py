@@ -9,7 +9,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 
-from core.permissions import role_required
+from core.permissions import role_required, access_required
 from orders.models import Customer, Order, OrderStatus
 from inventory.models import Supplier
 from core.models import SiteSetting
@@ -383,7 +383,7 @@ def _write_invoice_lines(request, inv):
     return n
 
 
-@admin_only
+@access_required("create_invoices")
 def invoice_new(request):
     import json
     form = InvoiceForm(request.POST or None)
@@ -589,7 +589,7 @@ def statement(request, customer_id):
 # ============================================================
 # Customer payments
 # ============================================================
-@admin_only
+@access_required("apply_payments")
 def payment_new(request):
     initial = {}
     cust_id = request.GET.get("customer")
@@ -791,7 +791,7 @@ def ap_aging(request):
         "rows": rows, "buckets": buckets, "total": total, "sym": _sym()})
 
 
-@admin_only
+@access_required("apply_payments")
 def bill_payment_new(request):
     # supplier can arrive via the GET reload (picking a supplier) or the POST form
     sup_id = request.GET.get("supplier") or request.POST.get("supplier")

@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from accounts.models import Role
 from catalogue.models import Product
-from core.permissions import role_required, ALL_STAFF
+from core.permissions import role_required, access_required, ALL_STAFF
 from .forms import CustomerForm
 from .models import Customer, Order, OrderItem, OrderStatus
 
@@ -116,7 +116,7 @@ def customer_detail(request, pk):
     })
 
 
-@role_required(Role.SALES, Role.TEAM_LEAD)
+@access_required("create_customers")
 def customer_create(request):
     form = CustomerForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -205,7 +205,7 @@ def pricing_api(request):
     return JsonResponse({"prices": data})
 
 
-@role_required(Role.SALES)
+@access_required("sales")
 def order_create(request):
     if request.method == "POST":
         return _save_order(request, order=None)

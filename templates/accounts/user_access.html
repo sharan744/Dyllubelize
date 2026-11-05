@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}User Access{% endblock %}
+{% block page_title %}User Access{% endblock %}
+{% block topbar_actions %}
+<a href="{% url 'user_list' %}" class="btn btn-soft">{% include 'core/_icon.html' with name='back' %} Back to Users</a>
+{% endblock %}
+{% block content %}
+<p class="small muted" style="margin:0 0 12px">
+  Tick what each user is allowed to do, then Save. Admins always have full access.
+</p>
+<form method="post">
+  {% csrf_token %}
+  <div class="card"><div class="table-wrap">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>User</th>
+        {% for key, label in perms %}<th class="num" style="white-space:nowrap">{{ label }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>
+          <b>{{ row.user.display_name }}</b>
+          <div class="small muted">{{ row.user.username }} · {{ row.user.get_role_display }}</div>
+        </td>
+        {% for key, label in perms %}
+        <td class="num">
+          <input type="checkbox" name="perm_{{ row.user.id }}" value="{{ key }}"
+                 {% if key in row.granted %}checked{% endif %}
+                 {% if row.user.is_admin_role %}disabled title="Admins always have full access"{% endif %}>
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div></div>
+  <div style="margin-top:14px">
+    <button type="submit" class="btn btn-primary">Save access</button>
+  </div>
+</form>
+{% endblock %}

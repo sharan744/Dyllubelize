@@ -7,6 +7,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from core.permissions import role_required
 from .forms import UserCreateForm, UserEditForm
 from .models import User, Role
+from .perms import ACCESS_PERMS, ACCESS_PERM_KEYS, default_perms_for_role
 
 
 @role_required()  # admin only
@@ -17,12 +18,38 @@ def user_list(request):
     })
 
 
+@role_required()  # admin only
+def user_access(request):
+    """Admin grid to grant/revoke each user's access permissions."""
+    users = list(User.objects.all())
+    if request.method == "POST":
+        changed = 0
+        for u in users:
+            if u.is_admin_role:
+                continue  # admins always have everything
+            selected = [p for p in request.POST.getlist(f"perm_{u.id}")
+                        if p in ACCESS_PERM_KEYS]
+            if list(u.access_perms or []) != selected:
+                u.access_perms = selected
+                u.save(update_fields=["access_perms"])
+                changed += 1
+        messages.success(request, f"Access updated for {changed} user(s).")
+        return redirect("user_access")
+    rows = [{"user": u, "granted": set(u.effective_perms)} for u in users]
+    return render(request, "accounts/user_access.html",
+                  {"rows": rows, "perms": ACCESS_PERMS})
+
+
 @role_required()
 def user_create(request):
     if request.method == "POST":
         form = UserCreateForm(request.POST)
         if form.is_valid():
             user = form.save()
+            # Seed the new user with the default permissions for their role;
+            # the admin can fine-tune them on the User Access screen.
+            user.access_perms = default_perms_for_role(user.role)
+            user.save(update_fields=["access_perms"])
             messages.success(request, f"User “{user.display_name}” created.")
             return redirect("user_list")
     else:

@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from .perms import ACCESS_PERM_KEYS
+
 
 class Role(models.TextChoices):
     ADMIN = "admin", "Admin"
@@ -22,6 +24,12 @@ class User(AbstractUser):
     incentive_percent = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True,
         help_text="Overrides the company default incentive % for this salesperson (blank = use default).",
+    )
+    # Granular access permissions the admin grants per user (keys from
+    # accounts.perms.ACCESS_PERMS). Admins implicitly have everything.
+    access_perms = models.JSONField(
+        default=list, blank=True,
+        help_text="Access permissions granted to this user.",
     )
 
     class Meta:
@@ -70,3 +78,19 @@ class User(AbstractUser):
     def can(self, *roles):
         """True if the user's role is in roles (admin can do everything)."""
         return self.is_admin_role or self.role in roles
+
+    # --- Granular access permissions ---
+    def has_access(self, perm):
+        """True if this user is granted a given access permission.
+        Admins (and anyone with 'full_access') can do everything."""
+        if self.is_admin_role:
+            return True
+        perms = self.access_perms or []
+        return "full_access" in perms or perm in perms
+
+    @property
+    def effective_perms(self):
+        """The permission keys this user effectively has (all keys for admins)."""
+        if self.is_admin_role:
+            return list(ACCESS_PERM_KEYS)
+        return list(self.access_perms or [])

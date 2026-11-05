@@ -123,6 +123,9 @@ def product_detail(request, pk):
 @api_view(["GET", "POST"])
 def customers(request):
     if request.method == "POST":
+        if not request.user.has_access("create_customers"):
+            return Response({"detail": "You don't have permission to create customers."},
+                            status=http.HTTP_403_FORBIDDEN)
         ser = CustomerSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         obj = ser.save(created_by=request.user)
@@ -184,8 +187,8 @@ def order_detail(request, pk):
 
 def _create_order(request):
     u = request.user
-    if not (u.is_sales or u.is_admin_role):
-        return Response({"detail": "Only sales can create orders."},
+    if not u.has_access("sales"):
+        return Response({"detail": "You don't have permission to create orders."},
                         status=http.HTTP_403_FORBIDDEN)
     customer_id = request.data.get("customer")
     if not customer_id:

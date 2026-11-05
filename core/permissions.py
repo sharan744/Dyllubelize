@@ -22,6 +22,25 @@ def role_required(*roles):
     return decorator
 
 
+def access_required(perm):
+    """View decorator: allow only users granted a given access permission
+    (admins and 'full_access' holders always allowed)."""
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped(request, *args, **kwargs):
+            user = request.user
+            if not user.is_authenticated:
+                raise PermissionDenied
+            if user.has_access(perm):
+                return view_func(request, *args, **kwargs)
+            raise PermissionDenied
+
+        return _wrapped
+
+    return decorator
+
+
 class RoleRequiredMixin(LoginRequiredMixin):
     """Class-based view mixin restricting access to allowed_roles."""
 

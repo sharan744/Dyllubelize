@@ -1,6 +1,20 @@
 from .models import SiteSetting
 
 
+def access_perms(request):
+    """Expose the current user's access permissions to templates as `access`,
+    e.g. {% if access.create_po %}…{% endif %}."""
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return {"access": {}}
+    try:
+        from accounts.perms import ACCESS_PERM_KEYS
+        granted = set(user.effective_perms)
+        return {"access": {k: (k in granted) for k in ACCESS_PERM_KEYS}}
+    except Exception:
+        return {"access": {}}
+
+
 def company_settings(request):
     try:
         settings_obj = SiteSetting.get()

@@ -75,6 +75,9 @@ def purchase_orders(request):
 
 
 def _create_po(request):
+    if not request.user.has_access("create_po"):
+        return Response({"detail": "You don't have permission to create purchase orders."},
+                        status=http.HTTP_403_FORBIDDEN)
     sup_id = request.data.get("supplier")
     if not sup_id:
         return Response({"detail": "supplier is required."}, status=http.HTTP_400_BAD_REQUEST)

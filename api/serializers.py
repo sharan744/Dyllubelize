@@ -21,9 +21,15 @@ class UserSerializer(serializers.Serializer):
     role_label = serializers.SerializerMethodField()
     email = serializers.EmailField()
     phone = serializers.CharField()
+    access_perms = serializers.SerializerMethodField()
 
     def get_role_label(self, obj):
         return obj.get_role_display()
+
+    def get_access_perms(self, obj):
+        # Effective permissions (admins get everything) so the app can
+        # show/hide features per user.
+        return obj.effective_perms
 
 
 class CategorySerializer(serializers.ModelSerializer):

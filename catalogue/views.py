@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 
-from core.permissions import role_required, RoleRequiredMixin, ALL_STAFF
+from core.permissions import role_required, access_required, RoleRequiredMixin, ALL_STAFF
 from .forms import CategoryForm, ProductForm
 from .models import Category, Product, ProductSpec, COMMON_SPECS
 
@@ -33,7 +33,7 @@ def product_detail(request, pk):
     })
 
 
-@role_required(*ALL_STAFF)
+@access_required("view_catalogue")
 def catalogue_browse(request):
     """Read-only catalogue for everyone; management links appear for admins."""
     q = request.GET.get("q", "").strip()

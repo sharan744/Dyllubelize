@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 
 from accounts.models import Role
 from catalogue.models import Product, StockMovement, Category
-from core.permissions import role_required
+from core.permissions import role_required, access_required
 from .forms import SupplierForm, PurchaseOrderForm
 from .models import Supplier, PurchaseOrder, PurchaseOrderLine, PurchaseOrderExpense
 
@@ -189,7 +189,7 @@ def _rebuild_po_lines(request, po, products, rate, mark_received=False):
     return None
 
 
-@role_required(*INV_ROLES)
+@access_required("create_po")
 def po_create(request):
     products = Product.objects.filter(is_active=True).select_related("category")
     if request.method == "POST":
