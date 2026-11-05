@@ -234,7 +234,7 @@ class InvoiceLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InvoiceLine
-        fields = ("id", "description", "quantity", "unit_price", "line_total")
+        fields = ("id", "description", "quantity", "unit_price", "taxable", "line_total")
 
     def get_line_total(self, obj):
         return float(obj.quantity * obj.unit_price)

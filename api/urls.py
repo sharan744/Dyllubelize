@@ -22,6 +22,10 @@ urlpatterns = [
     path("orders/", views.orders, name="api_orders"),
     path("orders/<int:pk>/", views.order_detail, name="api_order_detail"),
     path("orders/<int:pk>/action/", views.order_action, name="api_order_action"),
+    # order line editing (inline edit + add missing item from inventory)
+    path("orders/<int:pk>/items/add/", views.order_line_add, name="api_order_line_add"),
+    path("orders/<int:pk>/items/update/", views.order_line_update, name="api_order_line_update"),
+    path("orders/<int:pk>/items/remove/", views.order_line_remove, name="api_order_line_remove"),
 
     # order documents (invoice + dispatch note) and incentives
     path("orders/<int:pk>/invoice/", views2.order_invoice, name="api_order_invoice"),

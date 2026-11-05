@@ -133,7 +133,7 @@ DATABASES = {
         'NAME': 'dyllu_db',
         'USER': 'dyllu_user',
         'PASSWORD': 'dyllu@26',
-        'HOST': '127.0.0.1',
+        'HOST': '64.227.167.71',
         'PORT': '5432',
     }
 }
