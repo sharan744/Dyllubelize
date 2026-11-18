@@ -4,14 +4,79 @@
 {% block page_title %}New Credit Note{% endblock %}
 {% block content %}
 <a href="{% url 'acc_credit_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to credit notes</a>
-<form method="post" class="card card-pad" style="max-width:640px">{% csrf_token %}
+<form method="post" class="card card-pad" style="max-width:860px">{% csrf_token %}
+  {% if form.non_field_errors %}
+  <div class="card card-pad" style="border:1px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:12px">
+    {% for e in form.non_field_errors %}<div class="small" style="color:var(--danger,#c0392b)">{{ e }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
   <div class="grid grid-2" style="gap:12px">
+    <div class="field">
+      <label>Invoice number</label>
+      <input type="text" name="invoice_no" id="cn-invno" list="cn-invlist" value="{{ inv_no }}"
+             placeholder="Type or pick an invoice number" autocomplete="off">
+      <datalist id="cn-invlist">
+        {% for i in invoice_choices %}<option value="{{ i.number }}">{{ i.customer }} · {{ i.date|date:"d M Y" }} · {{ sym }}{{ i.total|floatformat:2|intcomma }}</option>{% endfor %}
+      </datalist>
+      {% if inv_error %}<div class="small" style="color:var(--danger,#c0392b);margin-top:4px">{{ inv_error }}</div>{% endif %}
+    </div>
     <div class="field"><label>Customer</label>{{ form.customer }}</div>
     <div class="field"><label>Date</label>{{ form.date }}</div>
-    <div class="field"><label>Amount</label>{{ form.amount }}</div>
     <div class="field"><label>Reason</label>{{ form.reason }}</div>
   </div>
-  <p class="small muted">A credit note reduces what the customer owes (Dr Sales Returns, Cr Accounts Receivable).</p>
+
+  {% if sel_inv %}
+  <h3 style="margin:16px 0 4px">Items on {{ sel_inv.number }}</h3>
+  <p class="small muted" style="margin:0 0 8px">
+    {{ sel_inv.customer }} · {{ sel_inv.date|date:"d M Y" }} · Total {{ sym }}{{ sel_inv.total|floatformat:2|intcomma }}
+    · Balance {{ sym }}{{ sel_inv.balance|floatformat:2|intcomma }}
+  </p>
+  <div class="table-wrap"><table class="tbl" id="cn-lines">
+    <thead><tr>
+      <th>Item</th><th class="num">Invoiced</th><th class="num">Already credited</th>
+      <th class="num">Unit price</th><th class="num">Qty to credit</th><th class="num">Credit</th>
+    </tr></thead>
+    <tbody>
+      {% for r in lines %}
+      <tr>
+        <td>{{ r.line.description }}{% if r.line.taxable %} <span class="small muted">· GST</span>{% endif %}</td>
+        <td class="num">{{ r.line.quantity|floatformat:-2 }}</td>
+        <td class="num">{{ r.credited|floatformat:-2 }}</td>
+        <td class="num">{{ sym }}{{ r.line.unit_price|floatformat:2|intcomma }}</td>
+        <td class="num">
+          {% if r.remaining > 0 %}
+          <input type="number" name="credit_qty_{{ r.line.pk }}" value="{{ r.qty }}" min="0"
+                 max="{{ r.remaining|stringformat:'s' }}" step="any" style="width:100px;text-align:right"
+                 data-price="{{ r.line.unit_price|stringformat:'s' }}" data-taxable="{{ r.line.taxable|yesno:'1,0' }}"
+                 class="cn-qty">
+          <div class="small muted">max {{ r.remaining|floatformat:-2 }}</div>
+          {% else %}<span class="small muted">fully credited</span>{% endif %}
+        </td>
+        <td class="num cn-line-total">{{ sym }}0.00</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty"><p>This invoice has no items.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5" class="num">Subtotal</td><td class="num" id="cn-sub">{{ sym }}0.00</td></tr>
+      <tr><td colspan="5" class="num">GST ({{ sel_inv.tax_percent|floatformat:-2 }}%)</td><td class="num" id="cn-tax">{{ sym }}0.00</td></tr>
+      <tr><td colspan="5" class="num"><b>Credit total</b></td><td class="num"><b id="cn-total">{{ sym }}0.00</b></td></tr>
+    </tfoot>
+  </table></div>
+  <input type="hidden" name="amount" id="cn-amount" value="0">
+  <p class="small muted" style="margin-top:8px">
+    The credit is applied to <b>{{ sel_inv.number }}</b> automatically (up to its balance).
+    It reduces what the customer owes (Dr Sales Returns, Cr Accounts Receivable).
+  </p>
+
+  {% else %}
+  <div class="grid grid-2" style="gap:12px;margin-top:12px">
+    <div class="field"><label>Amount</label>{{ form.amount }}</div>
+  </div>
+  <p class="small muted">A credit note reduces what the customer owes (Dr Sales Returns, Cr Accounts Receivable).
+    Enter an invoice number above to credit specific items from it.</p>
 
   {% if open_invoices %}
   <h3 style="margin:14px 0 6px">Apply to open invoices (optional)</h3>
@@ -33,6 +98,7 @@
   {% else %}
   <p class="small muted">Pick a customer to list their open invoices and apply this credit to them.</p>
   {% endif %}
+  {% endif %}
 
   <div class="form-actions">
     <button class="btn btn-primary" data-busy>Issue Credit Note</button>
@@ -41,8 +107,50 @@
 </form>
 <script>
 (function(){
-  const sel=document.querySelector('select[name=customer]');
-  if(sel) sel.addEventListener('change',()=>{ if(sel.value) location.href='?customer='+sel.value; });
+  const SYM = "{{ sym|escapejs }}";
+  const TAXP = parseFloat("{% if sel_inv %}{{ sel_inv.tax_percent|stringformat:'s' }}{% else %}0{% endif %}") || 0;
+  const sel = document.querySelector('select[name=customer]');
+  const invno = document.getElementById('cn-invno');
+
+  // Picking a customer lists their invoices; picking an invoice number loads its items.
+  if (sel) sel.addEventListener('change', () => {
+    location.href = '?customer=' + encodeURIComponent(sel.value || '');
+  });
+  if (invno) invno.addEventListener('change', () => {
+    const v = invno.value.trim();
+    const p = new URLSearchParams();
+    if (v) p.set('invoice_no', v); else if (sel && sel.value) p.set('customer', sel.value);
+    location.href = '?' + p.toString();
+  });
+
+  const money = n => SYM + (Math.round(n * 100) / 100).toLocaleString(undefined,
+                    {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  function recalc(){
+    let sub = 0, taxable = 0;
+    document.querySelectorAll('#cn-lines tbody tr').forEach(tr => {
+      const inp = tr.querySelector('.cn-qty');
+      const cell = tr.querySelector('.cn-line-total');
+      if (!inp || !cell) return;
+      let q = parseFloat(inp.value) || 0;
+      const max = parseFloat(inp.max);
+      if (q < 0) q = 0;
+      if (!isNaN(max) && q > max) q = max;
+      const amt = Math.round(q * (parseFloat(inp.dataset.price) || 0) * 100) / 100;
+      cell.textContent = money(amt);
+      sub += amt;
+      if (inp.dataset.taxable === '1') taxable += amt;
+    });
+    const tax = Math.round(taxable * TAXP) / 100;
+    const total = Math.round((sub + tax) * 100) / 100;
+    const s = document.getElementById('cn-sub'), t = document.getElementById('cn-tax'),
+          g = document.getElementById('cn-total'), a = document.getElementById('cn-amount');
+    if (s) s.textContent = money(sub);
+    if (t) t.textContent = money(tax);
+    if (g) g.textContent = money(total);
+    if (a) a.value = total.toFixed(2);
+  }
+  document.querySelectorAll('.cn-qty').forEach(i => i.addEventListener('input', recalc));
+  recalc();
 })();
 </script>
 {% endblock %}

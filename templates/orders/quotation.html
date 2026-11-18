@@ -60,6 +60,11 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
   pointer-events: none; z-index: 80; }
 .qb-flash.show { opacity: 1; }
 .qb-flash.bad { background: #c0392b; }
+/* DYLLU watermark — sits behind the content */
+.doc-page { position: relative; }
+.doc-page > *:not(.doc-wm) { position: relative; z-index: 1; }
+.doc-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 62%; max-width: 480px; pointer-events: none; user-select: none; z-index: 0; }
 
 @media print {
   body { background: #fff !important; }
@@ -67,8 +72,10 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
   .app { display: block !important; }
   .main { display: block !important; }
   .content { padding: 0 !important; max-width: none !important; }
-  .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 0; }
-  @page { size: A4; margin: 14mm; }
+  /* Page margin 0 removes the browser's own header/footer (date, title, URL). */
+  @page { size: A4; margin: 0; }
+  .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 14mm 14mm; }
+  .doc-wm { position: fixed; top: 50%; left: 50%; }
   /* editable cells print as plain numbers */
   .qb-cell { border: none !important; background: none !important; box-shadow: none !important;
     padding: 0 !important; width: auto !important; -webkit-appearance: none; appearance: none; }
@@ -94,6 +101,7 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
 {% endif %}
 
 <div class="doc-page">
+  <img class="doc-wm" src="{% static 'img/dyllu-watermark.png' %}" alt="" aria-hidden="true">
   <!-- Header -->
   <div class="doc-head">
     <div class="co">

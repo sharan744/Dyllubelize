@@ -15,7 +15,7 @@
     <div class="card-head"><h3>Order History</h3><div class="spacer"></div><span class="chip">{{ customer.order_count }} order(s)</span></div>
     <div class="table-wrap">
       <table class="tbl">
-        <thead><tr><th>Order</th><th>Invoice No.</th><th>Status</th><th class="num">Total</th><th>Date</th><th class="num">Invoice</th></tr></thead>
+        <thead><tr><th>Order</th><th>Invoice No.</th><th>Status</th><th class="num">Total</th><th>Date</th><th class="num">Actions</th></tr></thead>
         <tbody>
           {% for o in orders %}
           <tr onclick="location.href='{% url 'order_detail' o.pk %}'" style="cursor:pointer">
@@ -25,10 +25,22 @@
             <td class="num" style="white-space:nowrap">{{ site.currency_symbol }}{{ o.total|floatformat:2|intcomma }}</td>
             <td class="small muted" style="white-space:nowrap">{{ o.created_at|date:"d M Y" }}</td>
             <td class="num" onclick="event.stopPropagation()" style="white-space:nowrap">
-              {% if o.disp_code == 'completed' or o.invoice %}
+              {% if o.invoice %}
               <a href="{% url 'order_invoice' o.pk %}" class="btn btn-ghost btn-sm">{% include 'core/_icon.html' with name='file' %} View</a>
               <a href="{% url 'order_invoice_pdf' o.pk %}" class="btn btn-ghost btn-sm" title="Download PDF">PDF</a>
-              {% else %}<span class="muted">—</span>{% endif %}
+              {% elif o.status != 'draft' and o.status != 'rejected' and o.status != 'cancelled' %}
+                {% if access.create_invoices or user.is_admin_role %}
+                <form method="post" action="{% url 'order_convert_invoice' o.pk %}" style="display:inline"
+                      onsubmit="return confirm('Create the invoice for {{ o.order_no }}?');">{% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button class="btn btn-primary btn-sm">Create invoice</button>
+                </form>
+                {% endif %}
+              {% endif %}
+              {% if user.is_admin_role %}
+              <a href="{% url 'order_delete' o.pk %}?next={{ request.path|urlencode }}" class="btn btn-ghost btn-sm"
+                 style="color:var(--danger,#c0392b)">Delete</a>
+              {% endif %}
             </td>
           </tr>
           {% empty %}

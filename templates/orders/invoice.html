@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load humanize static %}
-{% block title %}Invoice {{ inv_number }}{% endblock %}
+{% block title %}Invoice{% if has_invoice %} {{ inv_number }}{% endif %}{% endblock %}
 {% block extra_css %}
 <style>
 .doc-page {
@@ -45,14 +45,23 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
 .sign { border-top: 1.5px solid var(--dk); padding-top: 8px; font-size: .78rem; color: var(--sf); }
 .sign .sp { height: 46px; }
 .doc-note { font-size: .74rem; color: var(--sf); text-align: center; margin-top: 26px; border-top: 1px solid var(--ln); padding-top: 12px; }
+/* DYLLU watermark — sits behind the content */
+.doc-page { position: relative; }
+.doc-page > *:not(.doc-wm) { position: relative; z-index: 1; }
+.doc-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 62%; max-width: 480px; pointer-events: none; user-select: none; z-index: 0; }
 
 @media print {
   body { background: #fff !important; }
   .rail, .topbar, .doc-toolbar, .flashes, .menu-btn, .rail-scrim { display: none !important; }
   .app, .main { display: block !important; }
   .content { padding: 0 !important; max-width: none !important; }
-  .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 0; }
-  @page { size: A4; margin: 14mm; }
+  /* Page margin 0 removes the browser's own header/footer (date, title, URL,
+     page no.); the page padding below gives the content its margins instead. */
+  @page { size: A4; margin: 0; }
+  .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 14mm 14mm; }
+  /* Repeat the watermark in the centre of every printed page */
+  .doc-wm { position: fixed; top: 50%; left: 50%; }
 }
 </style>
 {% endblock %}
@@ -70,8 +79,21 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
   <a href="{% if standalone %}{{ pdf_url }}{% else %}{% url 'order_invoice_pdf' order.pk %}{% if revised %}?revised=1{% endif %}{% endif %}" class="btn btn-primary btn-sm">{% include 'core/_icon.html' with name='file' %} Download PDF</a>
   <button onclick="window.print()" class="btn btn-dark btn-sm">{% include 'core/_icon.html' with name='print' %} Print / Save as PDF</button>
 </div>
+{% if not standalone and not has_invoice %}
+<div class="doc-toolbar" style="justify-content:space-between;align-items:center;background:#fff8ec;border:1px solid #f1d9ad;border-radius:10px;padding:10px 14px">
+  <span class="small"><b>Not invoiced yet.</b> Create the invoice to give this document its invoice number.</span>
+  {% if access.create_invoices or user.is_admin_role %}
+  <form method="post" action="{% url 'order_convert_invoice' order.pk %}" style="margin:0"
+        onsubmit="return confirm('Create the invoice for {{ order.order_no }}?');">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn btn-primary btn-sm">Create invoice</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
 
 <div class="doc-page">
+  <img class="doc-wm" src="{% static 'img/dyllu-watermark.png' %}" alt="" aria-hidden="true">
   <!-- Header -->
   <div class="doc-head">
     <div class="co">
@@ -86,15 +108,13 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
     </div>
     <div class="meta">
       <div class="title">{% if revised %}Revised Invoice{% else %}Invoice{% endif %}</div>
-      <div class="dno">{{ inv_number }}</div>
+      {% if has_invoice %}<div class="dno">{{ inv_number }}</div>{% endif %}
       {% if revised %}<div style="font-size:.72rem;color:var(--ac);font-weight:700;margin-top:2px">Adjusted after returns</div>{% endif %}
       <table>
         <tr><td>Date:</td><td><b>{{ inv_date|date:"d M Y" }}</b></td></tr>
-        <tr><td>Due:</td><td><b>{{ due_date|date:"d M Y" }}</b></td></tr>
         <tr><td>Terms:</td><td><b>{{ terms_label }}</b></td></tr>
-        {% if order.order_no %}<tr><td>Order:</td><td><b>{{ order.order_no }}</b></td></tr>{% endif %}
       </table>
-      <span class="inv-status {{ inv_status_code }}">{{ inv_status }}</span>
+      {% if has_invoice %}{% if inv_status_code == 'paid' or inv_status_code == 'partial' %}<span class="inv-status {{ inv_status_code }}">{{ inv_status }}</span>{% endif %}{% endif %}
     </div>
   </div>
 

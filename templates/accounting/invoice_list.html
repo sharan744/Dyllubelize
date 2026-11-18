@@ -24,6 +24,14 @@
   <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th><th class="right">Actions</th></tr></thead>
   <tbody>
     {% for i in invoices %}
+    {% if i.day_head %}
+    <tr style="background:var(--paper2,#f4efe6)">
+      <td colspan="8" style="padding:8px 14px">
+        <b>{{ i.date|date:"l, d M Y" }}</b>
+        <span class="small muted">· {{ i.day_count }} invoice{{ i.day_count|pluralize }} · {{ sym }}{{ i.day_total|floatformat:2|intcomma }}</span>
+      </td>
+    </tr>
+    {% endif %}
     <tr>
       <td><a href="{% url 'acc_invoice_detail' i.pk %}"><b>{{ i.number }}</b></a></td>
       <td>{{ i.customer }}</td>

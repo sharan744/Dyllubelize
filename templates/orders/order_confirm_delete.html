@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Delete {{ order.order_no }}{% endblock %}
+{% block page_title %}Delete Order {{ order.order_no }}{% endblock %}
+{% block content %}
+<a href="{{ back }}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back</a>
+
+<div class="card card-pad" style="max-width:560px">
+  <h3 style="margin:0 0 4px">Delete {{ order.order_no }}?</h3>
+  <p class="small muted" style="margin:0 0 14px">
+    {{ order.customer }} · {{ order.created_at|date:"d M Y" }} · {{ site.currency_symbol }}{{ order.total|floatformat:2|intcomma }}
+    · {{ order.get_status_display }}
+  </p>
+  <div class="card card-pad" style="border:2px solid var(--danger,#c0392b);background:#fff4f2;margin-bottom:14px">
+    <b style="color:var(--danger,#c0392b)">This permanently removes the order.</b>
+    {% if order.stock_committed %}<p class="small" style="margin:6px 0 0">Its quantities will be returned to stock.</p>{% endif %}
+    {% if inv %}<p class="small" style="margin:6px 0 0">Its invoice <b>{{ inv.number }}</b> will also be deleted and its ledger entry reversed.</p>{% endif %}
+  </div>
+  <form method="post" action="{% url 'order_delete' order.pk %}">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ back }}">
+    <div class="flex" style="gap:10px">
+      <a href="{{ back }}" class="btn btn-ghost">Cancel</a>
+      <button class="btn btn-primary" style="background:var(--danger,#c0392b);border-color:var(--danger,#c0392b)"
+        onclick="return confirm('Delete {{ order.order_no }}? This cannot be undone.');">Delete {{ order.order_no }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -574,6 +574,32 @@ def order_invoice_pdf(request, pk):
     return resp
 
 
+def draw_watermark(canvas, doc):
+    """Faint DYLLU logo in the centre of each PDF page (best-effort).
+    Resolves the static file in dev (finders) and production (STATIC_ROOT)."""
+    try:
+        import os
+        from django.conf import settings
+        from django.contrib.staticfiles import finders
+        from reportlab.lib.utils import ImageReader
+        path = finders.find("img/dyllu-watermark.png")
+        if not path and getattr(settings, "STATIC_ROOT", None):
+            cand = os.path.join(str(settings.STATIC_ROOT), "img", "dyllu-watermark.png")
+            path = cand if os.path.exists(cand) else None
+        if not path:
+            return
+        img = ImageReader(path)
+        iw, ih = img.getSize()
+        pw, ph = doc.pagesize
+        w = pw * 0.62
+        h = w * ih / iw
+        canvas.saveState()
+        canvas.drawImage(img, (pw - w) / 2, (ph - h) / 2, width=w, height=h, mask="auto")
+        canvas.restoreState()
+    except Exception:
+        pass
+
+
 def _render_invoice_pdf(ctx):
     """Lay out the invoice with reportlab and return the PDF as bytes."""
     import io
@@ -600,7 +626,7 @@ def _render_invoice_pdf(ctx):
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Invoice {ctx['inv_number']}")
+                            title=("Invoice " + ctx["inv_number"]) if ctx.get("has_invoice") else "Invoice")
     ss = getSampleStyleSheet()
     h_co = ParagraphStyle("co", parent=ss["Normal"], fontName="Helvetica-Bold",
                           fontSize=17, textColor=DARK, leading=20)
@@ -645,16 +671,15 @@ def _render_invoice_pdf(ctx):
         co_lines.append(Paragraph("<br/>".join(info), small))
     co_cell = co_lines
 
-    meta_tbl = Table([
-        [Paragraph("REVISED INVOICE" if ctx.get("revised") else "INVOICE", titleR)],
-        [Paragraph(ctx["inv_number"], dnoR)],
-        [Paragraph(
-            f"Date: <b>{ctx['inv_date']:%d %b %Y}</b><br/>"
-            f"Due: <b>{ctx['due_date']:%d %b %Y}</b><br/>"
-            f"Terms: <b>{ctx['terms_label']}</b><br/>"
-            f"Order: <b>{order.order_no}</b>",
-            metaR)],
-    ], colWidths=[70 * mm])
+    # Invoice number only (no order no., due date or proforma label).
+    meta_rows = [[Paragraph("REVISED INVOICE" if ctx.get("revised") else "INVOICE", titleR)]]
+    if ctx.get("has_invoice"):
+        meta_rows.append([Paragraph(ctx["inv_number"], dnoR)])
+    meta_rows.append([Paragraph(
+        f"Date: <b>{ctx['inv_date']:%d %b %Y}</b><br/>"
+        f"Terms: <b>{ctx['terms_label']}</b>",
+        metaR)])
+    meta_tbl = Table(meta_rows, colWidths=[70 * mm])
     meta_tbl.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
                                   ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
 
@@ -779,7 +804,7 @@ def _render_invoice_pdf(ctx):
     story += [Spacer(1, 10), Paragraph(note + f"  Thank you for your business — {site.company_name}.",
                                        ParagraphStyle("foot", parent=small, alignment=1))]
 
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
     return buf.getvalue()
 
 
@@ -1109,3 +1134,81 @@ def processing_action(request, pk):
         order.set_status(OrderStatus.READY, user=request.user, note="Ready for dispatch")
         messages.success(request, f"Order {order.order_no} is Ready for Dispatch.")
     return redirect("processing_queue")
+
+# ============================================================
+# Customer page: convert an order to an invoice / delete an order
+# ============================================================
+def _order_invoice_obj(order):
+    """The order's invoice, or None (reverse one-to-one safe lookup)."""
+    from accounting.models import Invoice
+    return Invoice.objects.filter(order=order).first()
+
+
+def _back_to(request, order):
+    from django.urls import reverse
+    nxt = request.POST.get("next") or request.GET.get("next")
+    if nxt and nxt.startswith("/"):
+        return nxt
+    return reverse("customer_detail", args=[order.customer_id])
+
+
+@access_required("create_invoices")
+def order_convert_invoice(request, pk):
+    """Raise the customer invoice for an order (posts it to the ledger)."""
+    order = get_object_or_404(Order, pk=pk)
+    back = _back_to(request, order)
+    if request.method != "POST":
+        return redirect(back)
+    if order.status in (OrderStatus.DRAFT, OrderStatus.REJECTED, OrderStatus.CANCELLED):
+        messages.error(request, f"Order {order.order_no} is {order.get_status_display().lower()} "
+                                f"— it can't be invoiced.")
+    elif _order_invoice_obj(order):
+        messages.info(request, f"Order {order.order_no} already has an invoice.")
+    elif not order.items.exists():
+        messages.error(request, f"Order {order.order_no} has no items to invoice.")
+    else:
+        try:
+            from accounting import services as _acc
+            inv = _acc.invoice_from_order(order, user=request.user)
+            messages.success(request, f"Invoice {inv.number} created for order {order.order_no}.")
+        except Exception as e:
+            messages.error(request, f"Could not create the invoice: {e}")
+    return redirect(back)
+
+
+@role_required()  # admin only — same as deleting an invoice
+def order_delete(request, pk):
+    """Delete an order. Mirrors invoice deletion: blocked if its invoice has a
+    payment; otherwise the invoice's ledger entry is reversed and removed, any
+    committed stock is returned to the warehouse, then the order is deleted."""
+    order = get_object_or_404(Order.objects.select_related("customer"), pk=pk)
+    inv = _order_invoice_obj(order)
+    back = _back_to(request, order)
+    if inv and inv.amount_paid and inv.amount_paid > 0:
+        messages.error(request, f"Order {order.order_no}'s invoice {inv.number} has a payment "
+                                f"recorded — reverse the payment before deleting the order.")
+        return redirect(back)
+    if hasattr(order, "returns") and order.returns.exists():
+        messages.error(request, f"Order {order.order_no} has returns recorded against it "
+                                f"and can't be deleted.")
+        return redirect(back)
+    if request.method != "POST":
+        return render(request, "orders/order_confirm_delete.html",
+                      {"order": order, "inv": inv, "back": back})
+    order_no = order.order_no
+    try:
+        if order.stock_committed:
+            order.release_stock(request.user)   # put the quantities back on the shelf
+    except Exception:
+        pass
+    if inv:
+        try:
+            from accounting import services as _acc
+            _acc.void_invoice(inv, user=request.user)   # reverse the ledger entry
+        except Exception:
+            pass
+        inv.delete()
+    order.delete()
+    messages.success(request, f"Order {order_no} deleted"
+                              + (f" (and its invoice {inv.number})." if inv else "."))
+    return redirect(back)

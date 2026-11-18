@@ -24,6 +24,8 @@ urlpatterns = [
     path("<int:pk>/line-add/", views.order_line_add, name="order_line_add"),
     path("<int:pk>/line-remove/", views.order_line_remove, name="order_line_remove"),
     path("<int:pk>/cancel/", views.order_cancel, name="order_cancel"),
+    path("<int:pk>/convert-invoice/", views.order_convert_invoice, name="order_convert_invoice"),
+    path("<int:pk>/delete/", views.order_delete, name="order_delete"),
 
     # Team lead
     path("review/", views.review_queue, name="review_queue"),

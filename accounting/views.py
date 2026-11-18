@@ -17,6 +17,7 @@ from core.models import SiteSetting
 from .models import (
     Account, AccountType, DEBIT_NORMAL, JournalEntry, JournalLine, JournalSource,
     Invoice, InvoiceLine, Payment, PaymentApplication, CreditNote, CreditApplication,
+    CreditNoteLine,
     Bill, BillLine, BillPayment, BillPaymentApplication, Budget, Reconciliation,
     DocStatus, q,
 )
@@ -341,6 +342,18 @@ def invoice_list(request):
     elif period == "month":
         qs = qs.filter(date__gte=today - timezone.timedelta(days=30))
     invoices = list(qs[:400])
+    # Group by day (newest first): mark the first invoice of each date so the
+    # table can show a date heading with that day's count and total.
+    day_sum = {}
+    for inv in invoices:
+        c, t = day_sum.get(inv.date, (0, Z))
+        day_sum[inv.date] = (c + 1, t + inv.total)
+    seen = set()
+    for inv in invoices:
+        inv.day_head = inv.date not in seen
+        if inv.day_head:
+            seen.add(inv.date)
+            inv.day_count, inv.day_total = day_sum[inv.date]
     total_open = sum((i.balance for i in invoices if i.balance > 0), Z)
     return render(request, "accounting/invoice_list.html", {
         "invoices": invoices, "sym": _sym(), "status": status, "period": period,
@@ -647,35 +660,121 @@ def credit_list(request):
 
 @admin_only
 def credit_new(request):
-    cust_id = request.GET.get("customer")
-    # keep the picked customer selected after the reload that loads open invoices
-    form = CreditNoteForm(request.POST or None,
-                          initial={"customer": cust_id} if cust_id else None)
+    """Issue a credit note. Enter an invoice number to list that invoice's items
+    and credit specific quantities (amount incl. GST is worked out and the
+    credit is applied to that invoice). Without an invoice it works as before:
+    a free amount, optionally applied to the customer's open invoices."""
+    from django.db import transaction
+    src = request.POST if request.method == "POST" else request.GET
+    cust_id = src.get("customer") or None
+    inv_no = (src.get("invoice_no") or "").strip()
+    inv_error = ""
+    sel_inv = None
+    if inv_no:
+        sel_inv = (Invoice.objects.filter(number__iexact=inv_no)
+                   .exclude(status__in=[DocStatus.DRAFT, DocStatus.VOID])
+                   .select_related("customer").first())
+        if sel_inv:
+            cust_id = str(sel_inv.customer_id)
+        else:
+            inv_error = f"No invoice found with number “{inv_no}”."
+
+    data = None
+    if request.method == "POST":
+        data = request.POST.copy()
+        if sel_inv:
+            data["customer"] = str(sel_inv.customer_id)   # invoice decides the customer
+            if not data.get("amount"):
+                data["amount"] = "0"                       # recalculated from the items below
+    form = CreditNoteForm(data, initial={"customer": cust_id} if cust_id else None)
+
+    inv_qs = (Invoice.objects.exclude(status__in=[DocStatus.DRAFT, DocStatus.VOID])
+              .select_related("customer").prefetch_related("lines"))
+    invoice_choices = (inv_qs.filter(customer_id=cust_id) if cust_id else inv_qs
+                       ).order_by("-date", "-id")[:300]
+
+    # Items on the chosen invoice, with how much of each was already credited.
+    lines = []
+    if sel_inv:
+        for l in sel_inv.lines.all():
+            credited = q(sum((c.quantity for c in l.credit_lines.exclude(
+                credit_note__status=DocStatus.VOID)), Z))
+            remaining = q(l.quantity - credited)
+            lines.append({"line": l, "credited": credited,
+                          "remaining": remaining if remaining > 0 else Z,
+                          "qty": src.get(f"credit_qty_{l.pk}", "0") or "0"})
+
     open_invoices = []
-    if cust_id:
-        open_invoices = [i for i in Invoice.objects.filter(
-            customer_id=cust_id).exclude(status__in=[DocStatus.DRAFT, DocStatus.VOID])
-            if i.balance > 0]
-    if request.method == "POST" and form.is_valid():
-        cn = form.save(commit=False)
-        cn.created_by = request.user
-        cn.save()
-        # optional application to invoices
-        inv_ids = request.POST.getlist("apply_invoice")
-        amounts = request.POST.getlist("apply_amount")
-        for i, iid in enumerate(inv_ids):
-            try:
-                amt = Decimal(amounts[i] or "0")
-            except (InvalidOperation, IndexError):
-                amt = Z
-            if amt > 0:
-                CreditApplication.objects.create(credit_note=cn, invoice_id=iid, amount=q(amt))
-        services.post_credit_note(cn, user=request.user)
-        messages.success(request, f"Credit note {cn.number} issued.")
-        return redirect("acc_credit_list")
-    return render(request, "accounting/credit_form.html",
-                  {"form": form, "customers": Customer.objects.all(),
-                   "open_invoices": open_invoices, "sym": _sym()})
+    if cust_id and not sel_inv:
+        open_invoices = [i for i in inv_qs.filter(customer_id=cust_id) if i.balance > 0]
+
+    if request.method == "POST" and not inv_error and form.is_valid():
+        if sel_inv:
+            picked, errors = [], []
+            for row in lines:
+                l = row["line"]
+                try:
+                    qty = Decimal(str(row["qty"]).strip() or "0")
+                except InvalidOperation:
+                    errors.append(f"{l.description}: enter a valid quantity.")
+                    continue
+                if qty < 0:
+                    errors.append(f"{l.description}: quantity can't be negative.")
+                elif qty > row["remaining"]:
+                    errors.append(f"{l.description}: only {row['remaining']} left to credit.")
+                elif qty > 0:
+                    picked.append((l, q(qty)))
+            if not picked and not errors:
+                errors.append("Enter a quantity to credit for at least one item.")
+            for e in errors:
+                form.add_error(None, e)
+            if not errors:
+                sub = sum((q(qty * l.unit_price) for l, qty in picked), Z)
+                taxable = sum((q(qty * l.unit_price) for l, qty in picked if l.taxable), Z)
+                amount = q(sub + q(taxable * (sel_inv.tax_percent or 0) / 100))
+                balance_before = sel_inv.balance
+                with transaction.atomic():
+                    cn = form.save(commit=False)
+                    cn.customer = sel_inv.customer
+                    cn.invoice = sel_inv
+                    cn.amount = amount
+                    cn.created_by = request.user
+                    cn.save()
+                    for l, qty in picked:
+                        CreditNoteLine.objects.create(
+                            credit_note=cn, invoice_line=l, description=l.description,
+                            quantity=qty, unit_price=l.unit_price, taxable=l.taxable)
+                    apply_amt = min(amount, balance_before)
+                    if apply_amt > 0:
+                        CreditApplication.objects.create(
+                            credit_note=cn, invoice=sel_inv, amount=q(apply_amt))
+                    services.post_credit_note(cn, user=request.user)
+                messages.success(request, f"Credit note {cn.number} issued against "
+                                          f"{sel_inv.number} for {_sym()}{amount:,.2f}.")
+                return redirect("acc_credit_list")
+        else:
+            cn = form.save(commit=False)
+            cn.created_by = request.user
+            cn.save()
+            # optional application to invoices
+            inv_ids = request.POST.getlist("apply_invoice")
+            amounts = request.POST.getlist("apply_amount")
+            for i, iid in enumerate(inv_ids):
+                try:
+                    amt = Decimal(amounts[i] or "0")
+                except (InvalidOperation, IndexError):
+                    amt = Z
+                if amt > 0:
+                    CreditApplication.objects.create(credit_note=cn, invoice_id=iid, amount=q(amt))
+            services.post_credit_note(cn, user=request.user)
+            messages.success(request, f"Credit note {cn.number} issued.")
+            return redirect("acc_credit_list")
+    return render(request, "accounting/credit_form.html", {
+        "form": form, "customers": Customer.objects.all(),
+        "open_invoices": open_invoices, "sym": _sym(),
+        "inv_no": inv_no, "inv_error": inv_error, "sel_inv": sel_inv,
+        "lines": lines, "invoice_choices": invoice_choices,
+    })
 
 
 # API: open invoices for a customer (used by payment/credit forms)

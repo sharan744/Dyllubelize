@@ -369,6 +369,9 @@ class CreditNote(models.Model):
     number = models.CharField(max_length=20, unique=True, editable=False, db_index=True)
     customer = models.ForeignKey("orders.Customer", on_delete=models.PROTECT,
                                  related_name="credit_notes")
+    # The invoice this credit was raised against (optional).
+    invoice = models.ForeignKey("accounting.Invoice", null=True, blank=True,
+                                on_delete=models.SET_NULL, related_name="credit_notes")
     date = models.DateField(default=timezone.localdate)
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reason = models.CharField(max_length=200, blank=True)
@@ -418,6 +421,25 @@ class CreditApplication(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE,
                                 related_name="credit_applications")
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+
+class CreditNoteLine(models.Model):
+    """An invoice item (and quantity) being credited back to the customer."""
+    credit_note = models.ForeignKey(CreditNote, on_delete=models.CASCADE,
+                                    related_name="lines")
+    invoice_line = models.ForeignKey(InvoiceLine, null=True, blank=True,
+                                     on_delete=models.SET_NULL, related_name="credit_lines")
+    description = models.CharField(max_length=200)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    taxable = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def amount(self):
+        return q(self.quantity * self.unit_price)
 
 
 # ============================================================

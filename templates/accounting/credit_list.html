@@ -5,17 +5,19 @@
 {% block topbar_actions %}<a href="{% url 'acc_credit_new' %}" class="btn btn-dark btn-sm">+ New Credit Note</a>{% endblock %}
 {% block content %}
 <div class="card"><div class="table-wrap"><table class="tbl">
-  <thead><tr><th>Number</th><th>Customer</th><th>Date</th><th>Reason</th><th class="num">Amount</th><th class="num">Remaining</th></tr></thead>
+  <thead><tr><th>Number</th><th>Customer</th><th>Invoice</th><th>Date</th><th>Reason</th><th class="num">Amount</th><th class="num">Remaining</th></tr></thead>
   <tbody>
     {% for c in notes %}
     <tr>
-      <td><b>{{ c.number }}</b></td><td>{{ c.customer }}</td><td>{{ c.date|date:"d M Y" }}</td>
-      <td class="muted">{{ c.reason }}</td>
+      <td><b>{{ c.number }}</b></td><td>{{ c.customer }}</td>
+      <td class="mono small">{% if c.invoice %}{{ c.invoice.number }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ c.date|date:"d M Y" }}</td>
+      <td class="muted">{{ c.reason }}{% if c.lines.all %}<div class="small">{% for l in c.lines.all %}{{ l.description }} × {{ l.quantity|floatformat:-2 }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
       <td class="num">{{ sym }}{{ c.amount|floatformat:2|intcomma }}</td>
       <td class="num">{{ sym }}{{ c.remaining|floatformat:2|intcomma }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6"><div class="empty"><p>No credit notes yet.</p></div></td></tr>
+    <tr><td colspan="7"><div class="empty"><p>No credit notes yet.</p></div></td></tr>
     {% endfor %}
   </tbody>
 </table></div></div>
