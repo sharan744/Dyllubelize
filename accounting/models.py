@@ -216,15 +216,11 @@ class Invoice(models.Model):
 
     @staticmethod
     def _next_no():
-        prefix = "INV-"
-        last = Invoice.objects.filter(number__startswith=prefix).order_by("-id").first()
-        n = 1
-        if last:
-            try:
-                n = int(last.number.split("-")[-1]) + 1
-            except ValueError:
-                n = Invoice.objects.count() + 1
-        return f"{prefix}{n:05d}"
+        """Invoice numbers run DO0001, DO0002, … (5+ digits after DO9999)."""
+        prefix = "DO"
+        nums = Invoice.objects.filter(number__regex=r"^DO[0-9]+$").values_list("number", flat=True)
+        n = max((int(x[len(prefix):]) for x in nums), default=0) + 1
+        return f"{prefix}{n:04d}"
 
     @property
     def subtotal(self):
