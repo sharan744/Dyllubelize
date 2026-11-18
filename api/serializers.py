@@ -17,14 +17,19 @@ class UserSerializer(serializers.Serializer):
     username = serializers.CharField()
     display_name = serializers.CharField()
     initials = serializers.CharField()
-    role = serializers.CharField()
+    role = serializers.SerializerMethodField()
     role_label = serializers.SerializerMethodField()
     email = serializers.EmailField()
     phone = serializers.CharField()
     access_perms = serializers.SerializerMethodField()
 
+    def get_role(self, obj):
+        # Same rule as the website: a superuser counts as admin even if the
+        # Role field says something else, so the app shows the full menu.
+        return "admin" if obj.is_admin_role else obj.role
+
     def get_role_label(self, obj):
-        return obj.get_role_display()
+        return "Admin" if obj.is_admin_role else obj.get_role_display()
 
     def get_access_perms(self, obj):
         # Effective permissions (admins get everything) so the app can
