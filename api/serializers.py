@@ -2,6 +2,7 @@
 from rest_framework import serializers
 
 from catalogue.models import Category, Product, ProductSpec
+from catalogue.thumbs import thumb_url
 from orders.models import Customer, Order, OrderItem, OrderStatusLog
 
 
@@ -45,6 +46,8 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    image_full = serializers.SerializerMethodField()
+    nearest_expiry = serializers.SerializerMethodField()
     category_name = serializers.CharField(source="category.name", read_only=True)
     unit_label = serializers.CharField(source="get_unit_display", read_only=True)
 
@@ -52,9 +55,18 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ("id", "name", "sku", "brand", "category", "category_name",
                   "unit", "unit_label", "selling_price", "stock_qty",
-                  "track_stock", "is_perishable", "nearest_expiry", "taxable", "image")
+                  "track_stock", "is_perishable", "nearest_expiry", "taxable",
+                  "image", "image_full")
+
+    def get_nearest_expiry(self, obj):
+        # Costs a DB query per product, so only look it up for perishables.
+        return obj.nearest_expiry if obj.is_perishable else None
 
     def get_image(self, obj):
+        # Small fast copy for grids/lists; the original is in image_full.
+        return thumb_url(self.context.get("request"), obj.image)
+
+    def get_image_full(self, obj):
         return _abs(self.context.get("request"), obj.image)
 
 
@@ -78,7 +90,8 @@ class ProductDetailSerializer(ProductSerializer):
             out.append({
                 "id": sp.pk, "name": sp.name, "sku": sp.sku,
                 "selling_price": float(sp.selling_price),
-                "image": _abs(req, sp.image),
+                "image": thumb_url(req, sp.image),
+                "image_full": _abs(req, sp.image),
             })
         return out
 
@@ -127,7 +140,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         req = self.context.get("request")
-        return _abs(req, obj.product.image) if obj.product_id and obj.product.image else ""
+        return thumb_url(req, obj.product.image) if obj.product_id and obj.product.image else ""
 
     def get_taxable(self, obj):
         return bool(getattr(getattr(obj, "product", None), "taxable", True)) if obj.product_id else True

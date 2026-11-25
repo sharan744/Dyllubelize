@@ -97,7 +97,8 @@ class InventoryProductSerializer(serializers.ModelSerializer):
         return float(obj.stock_value)
 
     def get_image(self, obj):
-        return _abs(self.context.get("request"), obj.image)
+        from catalogue.thumbs import thumb_url
+        return thumb_url(self.context.get("request"), obj.image)
 
 
 class StockMovementSerializer(serializers.ModelSerializer):
