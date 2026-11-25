@@ -371,6 +371,34 @@ def _products_for_picker():
     ]
 
 
+def _calc(raw, default):
+    """Number or simple calculation typed in a Qty / Price box ("12*4",
+    "100/3", "(10+2)*3") -> Decimal. Only + - * / and brackets are allowed."""
+    import ast
+    import operator as op
+    s = (raw or "").replace(",", "").strip()
+    if not s:
+        return Decimal(default)
+    ops = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv}
+
+    def ev(n):
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return Decimal(str(n.value))
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)):
+            v = ev(n.operand)
+            return -v if isinstance(n.op, ast.USub) else v
+        raise InvalidOperation(s)
+
+    try:
+        return ev(ast.parse(s, mode="eval"))
+    except (SyntaxError, ZeroDivisionError, ArithmeticError, ValueError):
+        raise InvalidOperation(s)
+
+
 def _write_invoice_lines(request, inv):
     """(Re)create an invoice's lines from the posted desc/qty/price/taxable rows.
     Returns the number of lines written."""
@@ -384,8 +412,8 @@ def _write_invoice_lines(request, inv):
         if not d.strip():
             continue
         try:
-            qty = Decimal(qtys[i] or "1")
-            pr = Decimal(prices[i] or "0")
+            qty = _calc(qtys[i], "1").quantize(Decimal("0.01"))
+            pr = _calc(prices[i], "0").quantize(Decimal("0.01"))
         except (InvalidOperation, IndexError):
             continue
         tx = (taxables[i] if i < len(taxables) else "1") != "0"

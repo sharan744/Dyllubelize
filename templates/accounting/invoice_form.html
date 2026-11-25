@@ -52,8 +52,8 @@
     tr.innerHTML=
       '<td style="position:relative"><input type="text" name="desc" class="desc" autocomplete="off" placeholder="Type to search products…" style="width:100%">'+
         '<div class="ac" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--paper,#fff);border:1px solid var(--line,#d9d2c4);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:220px;overflow:auto"></div></td>'+
-      '<td class="num"><input type="number" step="0.01" min="0" name="qty" value="1" class="q" style="width:72px"></td>'+
-      '<td class="num"><input type="number" step="0.01" min="0" name="price" value="0" class="p" style="width:100px"></td>'+
+      '<td class="num"><input type="text" inputmode="decimal" autocomplete="off" name="qty" value="1" class="q calc" title="Type a number or a calculation like 12*4" style="width:90px;text-align:right"></td>'+
+      '<td class="num"><input type="text" inputmode="decimal" autocomplete="off" name="price" value="0" class="p calc" title="Type a number or a calculation like 100/3" style="width:110px;text-align:right"></td>'+
       '<td style="text-align:center"><select name="taxable" class="tx"><option value="1">GST</option><option value="0">No tax</option></select></td>'+
       '<td class="num amt">'+money(0)+'</td>'+
       '<td><button type="button" class="rm btn btn-ghost btn-sm">✕</button></td>';
@@ -61,11 +61,30 @@
     return tr;
   }
 
+  // QuickBooks-style maths in Qty / Unit Price: 12*4, 100/3, 50+5*2, (10+2)*3
+  function evalExpr(raw){
+    const s=String(raw==null?'':raw).replace(/,/g,'').trim();
+    if(s==='') return NaN;
+    if(!/^[0-9+\-*/(). ]+$/.test(s)) return NaN;
+    try{ const v=Function('"use strict";return ('+s+')')(); return (typeof v==='number'&&isFinite(v))?v:NaN; }
+    catch(e){ return NaN; }
+  }
+  function num(el){ const v=evalExpr(el&&el.value); return isNaN(v)?0:v; }
+  // Replace "12*4" with "48" (rounded to 2 decimals)
+  function settle(el){
+    const v=evalExpr(el.value);
+    if(isNaN(v)){ if(el.value.trim()!=='') el.style.outline='2px solid #e03131'; return false; }
+    el.style.outline='';
+    const dp=2;
+    el.value=String(Math.round(v*Math.pow(10,dp))/Math.pow(10,dp));
+    return true;
+  }
+
   function recalc(){
     let sub=0, taxbase=0;
     const rate=(+((taxPctEl&&taxPctEl.value)||0))||0;
     tbody.querySelectorAll('tr').forEach(tr=>{
-      const a=(+tr.querySelector('.q').value||0)*(+tr.querySelector('.p').value||0);
+      const a=num(tr.querySelector('.q'))*num(tr.querySelector('.p'));
       tr.querySelector('.amt').textContent=money(a); sub+=a;
       if(tr.querySelector('.tx').value==='1') taxbase+=a;
     });
@@ -103,6 +122,19 @@
     recalc();
   });
   tbody.addEventListener('change',e=>{ if(e.target.classList.contains('tx')) recalc(); });
+  // Tab / click away -> show the result of the calculation
+  tbody.addEventListener('focusout',e=>{ if(e.target.classList.contains('calc')){ settle(e.target); recalc(); } });
+  // Enter in Qty / Price calculates instead of submitting the form
+  tbody.addEventListener('keydown',e=>{
+    if(e.key==='Enter' && e.target.classList.contains('calc')){ e.preventDefault(); settle(e.target); recalc(); }
+  });
+  // Before saving, turn every calculation into its number
+  tbody.closest('form').addEventListener('submit',e=>{
+    let bad=false;
+    tbody.querySelectorAll('.calc').forEach(el=>{ if(el.value.trim()!=='' && !settle(el)) bad=true; });
+    if(bad){ e.preventDefault(); alert('Please fix the Qty / Unit Price boxes marked in red.'); }
+    recalc();
+  });
   tbody.addEventListener('click',e=>{
     const item=e.target.closest('.ac-item');
     if(item){ const tr=e.target.closest('tr'); const box=tr.querySelector('.ac'); pick(tr, box._matches[+item.dataset.i]); return; }
