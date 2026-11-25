@@ -64,7 +64,9 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
 .doc-page { position: relative; }
 .doc-page > *:not(.doc-wm) { position: relative; z-index: 1; }
 .doc-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 62%; max-width: 480px; pointer-events: none; user-select: none; z-index: 0; }
+  width: 62%; max-width: 480px; pointer-events: none; user-select: none; z-index: 5; }
+/* on TOP of the table so row colours can't hide it (logo is ~91% transparent) */
+.doc-wm-print { display: none; }
 
 @media print {
   body { background: #fff !important; }
@@ -75,7 +77,9 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
   /* Page margin 0 removes the browser's own header/footer (date, title, URL). */
   @page { size: A4; margin: 0; }
   .doc-page { box-shadow: none; margin: 0 auto; max-width: none; padding: 14mm 14mm; }
-  .doc-wm { position: fixed; top: 50%; left: 50%; }
+  .doc-wm { display: none !important; }
+  .doc-wm-print { display: block; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 62%; max-width: 480px; z-index: 5; pointer-events: none; }
   /* editable cells print as plain numbers */
   .qb-cell { border: none !important; background: none !important; box-shadow: none !important;
     padding: 0 !important; width: auto !important; -webkit-appearance: none; appearance: none; }
@@ -102,6 +106,9 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
 
 <div class="doc-page">
   <img class="doc-wm" src="{% static 'img/dyllu-watermark.png' %}" alt="" aria-hidden="true">
+  <script>/* Print copy of the watermark at page level so it repeats on EVERY printed page */
+  (function () { var w = document.createElement('img'); w.src = "{% static 'img/dyllu-watermark.png' %}";
+    w.className = 'doc-wm-print'; w.alt = ''; w.setAttribute('aria-hidden', 'true'); document.body.appendChild(w); })();</script>
   <!-- Header -->
   <div class="doc-head">
     <div class="co">

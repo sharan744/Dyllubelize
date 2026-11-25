@@ -590,7 +590,7 @@ def draw_watermark(canvas, doc):
             return
         img = ImageReader(path)
         iw, ih = img.getSize()
-        pw, ph = doc.pagesize
+        pw, ph = doc.pagesize if doc is not None else canvas._pagesize
         w = pw * 0.62
         h = w * ih / iw
         canvas.saveState()
@@ -598,6 +598,20 @@ def draw_watermark(canvas, doc):
         canvas.restoreState()
     except Exception:
         pass
+
+
+def _watermark_canvas_class():
+    """Canvas that stamps the watermark when each page is FINISHED, i.e. on
+    top of the table (drawing it first let the row colours hide it). The logo
+    is ~91% transparent, so the text stays fully readable."""
+    from reportlab.pdfgen.canvas import Canvas
+
+    class WatermarkCanvas(Canvas):
+        def showPage(self):
+            draw_watermark(self, None)
+            super().showPage()
+
+    return WatermarkCanvas
 
 
 def _render_invoice_pdf(ctx):
@@ -804,7 +818,7 @@ def _render_invoice_pdf(ctx):
     story += [Spacer(1, 10), Paragraph(note + f"  Thank you for your business — {site.company_name}.",
                                        ParagraphStyle("foot", parent=small, alignment=1))]
 
-    doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+    doc.build(story, canvasmaker=_watermark_canvas_class())
     return buf.getvalue()
 
 
