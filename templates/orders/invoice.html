@@ -224,10 +224,5 @@ table.doc-tbl tbody tr:nth-child(even) { background: #faf7f1; }
     <div><div class="sp"></div><div class="sign">Authorised signature</div></div>
     <div><div class="sp"></div><div class="sign">Received by (name, signature &amp; date)</div></div>
   </div>
-
-  <div class="doc-note">
-    {% if tax_is_gst %}Line prices are before {{ tax_label }}; the total shown includes {{ tax_label }}.{% else %}This is a non-taxable (GST-exempt) invoice.{% endif %}
-    Thank you for your business — {{ site.company_name }}.
-  </div>
 </div>
 {% endblock %}

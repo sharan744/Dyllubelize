@@ -203,11 +203,6 @@ table.doc-tbl td.num { white-space: nowrap; }          /* keep $ and input on on
     <div><div class="sp"></div><div class="sign">Prepared by (name &amp; signature)</div></div>
     <div><div class="sp"></div><div class="sign">Customer acceptance (name, signature &amp; date)</div></div>
   </div>
-
-  <div class="doc-note">
-    {% if site.tax_enabled and site.tax_percent %}Line prices are before {{ site.tax_label }}; the total shown includes {{ site.tax_label }}.{% else %}Prices are exclusive of tax.{% endif %}
-    This quotation is valid until {{ valid_until|date:"d M Y" }} · {{ site.company_name }}.
-  </div>
 </div>
 
 {% if can_edit %}

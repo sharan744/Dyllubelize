@@ -813,11 +813,6 @@ def _render_invoice_pdf(ctx):
     if inotes.strip():
         story += [Paragraph(inotes.replace("\n", "<br/>"), body), Spacer(1, 8)]
 
-    note = ("Prices are before " + ctx["tax_label"] + "; the total includes " + ctx["tax_label"] + "."
-            if ctx["tax_is_gst"] else "This is a non-taxable (GST-exempt) invoice.")
-    story += [Spacer(1, 10), Paragraph(note + f"  Thank you for your business — {site.company_name}.",
-                                       ParagraphStyle("foot", parent=small, alignment=1))]
-
     doc.build(story, canvasmaker=_watermark_canvas_class())
     return buf.getvalue()
 
