@@ -306,6 +306,15 @@
 
   // --- Enter must CALCULATE the field, never submit the PO (bug fix) ---
   var poForm = document.getElementById('po-form');
+  // Send the on-screen order of the added items so the saved PO keeps it.
+  poForm.addEventListener('submit', function () {
+    var ids = Array.prototype.map.call(
+      tbody.querySelectorAll('tr.is-added[data-id]'),
+      function (tr) { return tr.getAttribute('data-id'); });
+    var h = poForm.querySelector('input[name=line_order]');
+    if (!h) { h = document.createElement('input'); h.type = 'hidden'; h.name = 'line_order'; poForm.appendChild(h); }
+    h.value = ids.join(',');
+  });
   poForm.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     var t = e.target;
@@ -359,6 +368,9 @@
   }
   function addRow(tr){
     if (!tr) return;
+    // Newly added item goes to the BOTTOM of the list, so items stay in the
+    // order they were added (1st on top, 2nd below it, ...).
+    tbody.insertBefore(tr, emptyRow);
     tr.classList.add('is-added');
     tr.style.display = '';
     var q = tr.querySelector('.in-qty');

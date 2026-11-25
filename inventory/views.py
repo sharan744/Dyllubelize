@@ -154,6 +154,14 @@ def _rebuild_po_lines(request, po, products, rate, mark_received=False):
     if not pending:
         return "Add a quantity for at least one product."
 
+    # Keep the order the items were added on screen (1st added = 1st line).
+    order = {}
+    for i, raw in enumerate((request.POST.get("line_order") or "").split(",")):
+        if raw.strip().isdigit():
+            order.setdefault(int(raw), i)
+    if order:
+        pending.sort(key=lambda row: order.get(row[0].id, len(order)))
+
     exp_names = request.POST.getlist("expense_name")
     exp_amounts = request.POST.getlist("expense_amount")
     exp_currencies = request.POST.getlist("expense_currency")
@@ -279,7 +287,11 @@ def po_edit(request, pk):
         form = PurchaseOrderForm(instance=po)
 
     # Annotate each product with its existing line values so the form prefills.
-    line_map = {l.product_id: l for l in po.lines.all()}
+    lines = list(po.lines.all())                     # ordered by id = added order
+    line_map = {l.product_id: l for l in lines}
+    line_pos = {l.product_id: i for i, l in enumerate(lines)}
+    # PO items first, in their saved order; the rest of the catalogue after.
+    products = sorted(products, key=lambda p: (0, line_pos[p.id]) if p.id in line_pos else (1, 0))
     for p in products:
         l = line_map.get(p.id)
         p.po_qty = f"{l.qty_ordered:g}" if l else ""
