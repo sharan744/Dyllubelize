@@ -210,7 +210,9 @@ class Invoice(models.Model):
     def save(self, *args, **kwargs):
         if not self.number:
             self.number = self._next_no()
-        if not self.due_date:
+        # Due date always follows the terms, so editing Terms (e.g. 30 -> 45)
+        # updates the due date and the "Net 45" shown on the invoice.
+        if self.date is not None and self.terms_days is not None:
             self.due_date = self.date + timezone.timedelta(days=self.terms_days)
         super().save(*args, **kwargs)
 
@@ -467,7 +469,9 @@ class Bill(models.Model):
         return f"{self.supplier} · {self.number}"
 
     def save(self, *args, **kwargs):
-        if not self.due_date:
+        # Due date always follows the terms, so editing Terms (e.g. 30 -> 45)
+        # updates the due date and the "Net 45" shown on the invoice.
+        if self.date is not None and self.terms_days is not None:
             self.due_date = self.date + timezone.timedelta(days=self.terms_days)
         super().save(*args, **kwargs)
 
