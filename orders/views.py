@@ -131,6 +131,30 @@ def customer_create(request):
     return render(request, "orders/customer_form.html", {"form": form, "title": "Add Customer"})
 
 
+@login_required
+def orders_live(request):
+    """Tiny 'has anything changed?' fingerprint for auto-refreshing the
+    Orders / queue / dashboard pages (polled every few seconds)."""
+    from django.db.models import Count, Max
+    agg = Order.objects.aggregate(n=Count("id"), last=Max("updated_at"))
+    sig = f"{agg['n']}-{agg['last'].timestamp() if agg['last'] else 0}"
+    return JsonResponse({"sig": sig})
+
+
+@access_required("create_customers")
+def customer_edit(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    form = CustomerForm(request.POST or None, instance=customer)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Customer updated.")
+        return redirect("customer_detail", pk=customer.pk)
+    return render(request, "orders/customer_form.html", {
+        "form": form, "title": f"Edit Customer · {customer.company_name or customer.name}",
+        "customer": customer,
+    })
+
+
 @role_required(Role.SALES, Role.TEAM_LEAD)
 def customer_search_api(request):
     q = request.GET.get("q", "").strip()

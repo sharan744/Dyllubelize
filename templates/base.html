@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261022">
   {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body{% block body_attrs %}{% endblock %}>
 {% if user.is_authenticated %}
 <div class="app">
   <div class="rail-scrim"></div>
@@ -277,6 +277,38 @@
   });
 })();
 </script>
+{% if user.is_authenticated %}
+<script>
+/* Live refresh: pages that set data-live (Orders, queues, dashboard) reload
+   by themselves when an order is created / changed anywhere — mobile app,
+   another PC or another window. Never reloads while you're typing. */
+(function () {
+  if (!document.body.hasAttribute('data-live')) return;
+  var url = "{% url 'orders_live' %}", sig = null, pending = false;
+  function busy() {
+    var a = document.activeElement;
+    return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  }
+  function check() {
+    if (document.hidden) return;
+    fetch(url, {credentials: 'same-origin', cache: 'no-store'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        if (sig === null) { sig = d.sig; return; }
+        if (d.sig !== sig) { pending = true; sig = d.sig; }
+        if (pending && !busy()) location.reload();
+      }).catch(function () {});
+  }
+  check();
+  setInterval(check, 8000);
+  document.addEventListener('visibilitychange', check);
+  window.addEventListener('focus', check);
+  // Coming back with the Back button shows an old copy of the page — refresh it.
+  window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload(); });
+})();
+</script>
+{% endif %}
 {% block extra_js %}{% endblock %}
 </body>
 </html>

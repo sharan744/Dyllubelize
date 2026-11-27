@@ -2,7 +2,8 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<a href="{% url 'customer_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to customers</a>
+{% if customer %}<a href="{% url 'customer_detail' customer.pk %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to customer</a>
+{% else %}<a href="{% url 'customer_list' %}" class="back-link">{% include 'core/_icon.html' with name='back' %} Back to customers</a>{% endif %}
 <div class="card card-pad" style="max-width:760px">
   <form method="post">{% csrf_token %}
     <div class="form-grid">
@@ -17,7 +18,7 @@
     </div>
     <div class="form-actions">
       <button class="btn btn-primary">Save Customer</button>
-      <a href="{% url 'customer_list' %}" class="btn btn-ghost">Cancel</a>
+      <a href="{% if customer %}{% url 'customer_detail' customer.pk %}{% else %}{% url 'customer_list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
     </div>
   </form>
 </div>

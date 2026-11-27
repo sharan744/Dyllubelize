@@ -1,8 +1,12 @@
 {% extends 'base.html' %}
+{% block body_attrs %} data-live{% endblock %}
 {% load humanize %}
 {% block title %}{{ customer.label }}{% endblock %}
 {% block page_title %}{{ customer.company_name|default:customer.name }}{% endblock %}
 {% block topbar_actions %}
+  {% if access.create_customers or user.is_admin_role %}
+  <a href="{% url 'customer_edit' customer.pk %}" class="btn btn-soft">{% include 'core/_icon.html' with name='edit' %} Edit</a>
+  {% endif %}
   {% if user.is_sales or user.is_admin_role %}
   <a href="{% url 'order_create' %}?customer={{ customer.pk }}" class="btn btn-primary">{% include 'core/_icon.html' with name='plus' %} New Order</a>
   {% endif %}
