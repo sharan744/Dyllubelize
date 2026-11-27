@@ -1,0 +1,21 @@
+{
+  "name": "UDL Belize",
+  "short_name": "UDL Belize",
+  "description": "Sales, orders, invoicing & accounting — United Distributors Ltd",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#17161f",
+  "icons": [
+    {"src": "/static/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/static/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "New invoice", "url": "/accounting/app/invoices/new/", "icons": [{"src": "/static/app/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Orders", "url": "/orders/", "icons": [{"src": "/static/app/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Invoices", "url": "/accounting/app/invoices/", "icons": [{"src": "/static/app/icon-192.png", "sizes": "192x192"}]}
+  ]
+}

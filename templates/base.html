@@ -7,6 +7,11 @@
   <title>{% block title %}UDL Belize{% endblock %} · UDL Belize</title>
   <link rel="icon" type="image/png" href="{% static 'img/brand-mark.png' %}?v=20261022">
   <link rel="alternate icon" href="{% static 'img/favicon.ico' %}">
+  {# Installable desktop app (Chrome/Edge: ⋮ → Install UDL Belize) #}
+  <link rel="manifest" href="{% static 'app/manifest.json' %}?v=1">
+  <meta name="theme-color" content="#17161f">
+  <link rel="apple-touch-icon" href="{% static 'app/apple-touch-icon.png' %}">
+  <meta name="application-name" content="UDL Belize">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261022">
